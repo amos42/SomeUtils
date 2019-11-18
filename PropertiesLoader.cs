@@ -1,4 +1,5 @@
 /* https://docs.oracle.com/cd/E23095_01/Platform.93/ATGProgGuide/html/s0204propertiesfileformat01.html */
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,21 +7,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PropertiesUtil
+namespace DevPlatform.DevTools.CommonControls.Service
 {
     public class PropertiesLoader
     {
         public bool InsertNewLineWhiteSpace { get; set; } = false;
 
-        public Dictionary<string, string> Load(string filename)
+        public Dictionary<string, object> Load(string filename)
         {
             var rows = File.ReadAllLines(filename);
 
-            var properties = new Dictionary<string, string>();
+            var properties = new Dictionary<string, object>();
 
             int mode = 0;
             string name = null;
-            var valueData = new StringBuilder();
+            //var valueData = new StringBuilder();
+            var valueData = new List<String>();
             foreach (var row in rows)
             {
                 var trimRow = row.TrimStart();
@@ -35,7 +37,7 @@ namespace PropertiesUtil
                             var value = tokens[1].Trim();
                             if (value.EndsWith("\\"))
                             {
-                                valueData.Append(value.Substring(0, value.Length - 1));
+                                valueData.Add(value.Substring(0, value.Length - 1));
                                 mode = 1;
                             }
                             else
@@ -50,23 +52,20 @@ namespace PropertiesUtil
                         break;
                     case 1:
                         {
-                            if (valueData.Length > 0 && InsertNewLineWhiteSpace)
-                            {
-                                valueData.Append(" ");
-                            }
                             trimRow = trimRow.TrimEnd();
                             if (trimRow.EndsWith("\\"))
                             {
-                                valueData.Append(trimRow.Substring(0, trimRow.Length - 1));
+                                valueData.Add(trimRow.Substring(0, trimRow.Length - 1));
                             }
                             else
                             {
-                                valueData.Append(trimRow);
-                                var value = valueData.ToString();
-                                if (value.StartsWith("\"") && value.EndsWith("\""))
-                                {
-                                    value = value.Substring(1, value.Length - 2);
-                                }
+                                valueData.Add(trimRow);
+                                //var value = valueData.ToString();
+                                //if (value.StartsWith("\"") && value.EndsWith("\""))
+                                //{
+                                //    value = value.Substring(1, value.Length - 2);
+                                //}
+                                var value = valueData.ToArray();
                                 properties.Add(name, value);
                                 valueData.Clear();
                                 mode = 0;
@@ -76,12 +75,45 @@ namespace PropertiesUtil
                         break;
                 }
             }
-            if (mode == 1 && valueData.Length > 0)
+            if (mode == 1 && valueData.Count > 0)
             {
                 properties.Add(name, valueData.ToString());
             }
 
             return properties;
+        }
+
+        public bool Save(Dictionary<string, object> properties, string path)
+        {
+            var sb = new StringBuilder();
+            foreach(var prop in properties)
+            {
+                if (prop.Value is string)
+                {
+                    sb.AppendLine($"{prop.Key} = {prop.Value}");
+                } 
+                else if(prop.Value is string[])
+                {
+                    var name = $"{prop.Key} = ";
+                    sb.Append(name);
+                    var whitespace = new String(' ', name.Length);
+                    int idx = 0;
+                    foreach(var val in prop.Value as string[])
+                    {
+                        if (idx > 0)
+                        {
+                            sb.AppendLine("\\");
+                            sb.Append(whitespace);
+                        }
+                        sb.Append(val);
+                        idx++;
+                    }
+                    sb.AppendLine();
+                }
+            }
+            File.WriteAllText(path, sb.ToString());
+
+            return true;
         }
     }
 }

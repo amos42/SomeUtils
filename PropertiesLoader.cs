@@ -105,6 +105,7 @@ namespace DevPlatform.DevTools.CommonControls.Service
                         {
                             if (idx > 0)
                             {
+                                if (InsertNewLineWhiteSpace) sb.Append(' ');
                                 sb.AppendLine("\\");
                                 sb.Append(whitespace);
                             }

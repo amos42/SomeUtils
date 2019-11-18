@@ -77,7 +77,7 @@ namespace DevPlatform.DevTools.CommonControls.Service
             }
             if (mode == 1 && valueData.Count > 0)
             {
-                properties.Add(name, valueData.ToString());
+                properties.Add(name, valueData.ToArray());
             }
 
             return properties;
@@ -92,23 +92,26 @@ namespace DevPlatform.DevTools.CommonControls.Service
                 {
                     sb.AppendLine($"{prop.Key} = {prop.Value}");
                 } 
-                else if(prop.Value is string[])
-                {
-                    var name = $"{prop.Key} = ";
-                    sb.Append(name);
-                    var whitespace = new String(' ', name.Length);
-                    int idx = 0;
-                    foreach(var val in prop.Value as string[])
+                else {
+                    var strLst = prop.Value as IEnumerable<string>;
+                    if (strLst != null)
                     {
-                        if (idx > 0)
+                        var name = $"{prop.Key} = ";
+                        sb.Append(name);
+                        var whitespace = new String(' ', name.Length);
+                        int idx = 0;
+                        foreach (var val in strLst)
                         {
-                            sb.AppendLine("\\");
-                            sb.Append(whitespace);
+                            if (idx > 0)
+                            {
+                                sb.AppendLine("\\");
+                                sb.Append(whitespace);
+                            }
+                            sb.Append(val);
+                            idx++;
                         }
-                        sb.Append(val);
-                        idx++;
+                        sb.AppendLine();
                     }
-                    sb.AppendLine();
                 }
             }
             File.WriteAllText(path, sb.ToString());

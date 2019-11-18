@@ -25,7 +25,9 @@ namespace DevPlatform.DevTools.CommonControls.Service
             var valueData = new List<String>();
             foreach (var row in rows)
             {
+                if (string.IsNullOrEmpty(row)) continue;
                 var trimRow = row.TrimStart();
+                if (string.IsNullOrEmpty(trimRow)) continue;
                 if (trimRow[0] == '#' || trimRow[0] == '!') continue;
 
                 switch (mode)
@@ -55,16 +57,15 @@ namespace DevPlatform.DevTools.CommonControls.Service
                             trimRow = trimRow.TrimEnd();
                             if (trimRow.EndsWith("\\"))
                             {
-                                valueData.Add(trimRow.Substring(0, trimRow.Length - 1));
+                                trimRow = trimRow.Substring(0, trimRow.Length - 1);
+                                if (!String.IsNullOrEmpty(trimRow))
+                                {
+                                    valueData.Add(trimRow);
+                                }
                             }
                             else
                             {
                                 valueData.Add(trimRow);
-                                //var value = valueData.ToString();
-                                //if (value.StartsWith("\"") && value.EndsWith("\""))
-                                //{
-                                //    value = value.Substring(1, value.Length - 2);
-                                //}
                                 var value = valueData.ToArray();
                                 properties.Add(name, value);
                                 valueData.Clear();

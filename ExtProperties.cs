@@ -136,6 +136,70 @@ namespace DevPlatform.DevTools.CommonControls.Service
             return true;
         }
 
+        public static IEnumerable<string> SplitString(string source)
+        {
+            if (source == null) return null;
+            source = source.Trim();
+
+            if (String.IsNullOrEmpty(source))
+            {
+                return new List<string> { String.Empty };
+            }
+
+            if (source.IndexOf(" ") < 0)
+            {
+                return new List<string> { source };
+            }
+
+            string str = "";
+
+            var strList = new List<string>();
+
+            var charList = new StringBuilder();
+            var srcChars = source.ToCharArray();
+            int mode = 0;
+            foreach(var ch in srcChars)
+            {
+                switch(mode)
+                {
+                    case 0: if(ch != ' ' && ch != '\t')
+                        {
+                            if(ch == '\"')
+                            {
+                                mode = 2;
+                            } 
+                            else
+                            {
+                                charList.Append(ch);
+                                mode = 1;
+                            }
+                        }
+                        break;
+                    case 1: if(ch == ' ' || ch == '\t')
+                        {
+                            strList.Add(charList.ToString());
+                            charList.Clear();
+                            mode = 0;
+                        }
+                        break;
+                    case 2:
+                        if (ch == '\"')
+                        {
+                            strList.Add(charList.ToString());
+                            charList.Clear();
+                            mode = 0;
+                        }
+                        break;
+                }
+            }
+            if (charList.Length > 0)
+            {
+                strList.Add(charList.ToString());
+            }
+
+            return strList;
+        }
+
         public bool Load(string filename)
         {
             return Load(filename, this) != null;
@@ -144,6 +208,35 @@ namespace DevPlatform.DevTools.CommonControls.Service
         public bool Save(string path)
         {
             return Save(this, path, SplitWithWhiteSpace);
+        }
+
+        public IEnumerable<string> GetSpliteValue(string key)
+        {
+            if (!TryGetValue(key, out var value)) return null;
+            if (value == null) return null;
+
+            var values = new List<string>();
+
+            if(value is string)
+            {
+                return SplitString(value as string);
+            } else
+            {
+                var lst = value as IEnumerable<string>;
+                if (lst != null) 
+                { 
+                    foreach(var str in lst)
+                    {
+                        var l = SplitString(str); ;
+                        if(l != null)
+                        {
+                            values.AddRange(l);
+                        }
+                    }
+                }
+            }
+
+            return values;
         }
     }
 }

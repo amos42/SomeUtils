@@ -1,5 +1,6 @@
-/* https://docs.oracle.com/cd/E23095_01/Platform.93/ATGProgGuide/html/s0204propertiesfileformat01.html */
-
+/// Java like properties utility
+/// 
+/// https://docs.oracle.com/cd/E23095_01/Platform.93/ATGProgGuide/html/s0204propertiesfileformat01.html 
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,15 +10,29 @@ using System.Threading.Tasks;
 
 namespace DevPlatform.DevTools.CommonControls.Service
 {
-    public class PropertiesLoader
+    public class ExtProperties : Dictionary<string, object>
     {
-        public bool InsertNewLineWhiteSpace { get; set; } = false;
+        //public bool InsertNewLineWhiteSpace { get; set; } = false;
 
-        public Dictionary<string, object> Load(string filename)
+        public bool SplitWithWhiteSpace { get; set; } = false;
+
+        public static Dictionary<string, object> Load(string filename, Dictionary<string, object> properties = null)
         {
-            var rows = File.ReadAllLines(filename);
+            if(!new FileInfo(filename).Exists)
+            {
+                return null;
+            }
 
-            var properties = new Dictionary<string, object>();
+            var rows = File.ReadAllLines(filename);
+            if(rows == null || !rows.Any())
+            {
+                return null;
+            }
+
+            if (properties == null)
+            {
+                properties = new Dictionary<string, object>();
+            }
 
             int mode = 0;
             string name = null;
@@ -84,7 +99,7 @@ namespace DevPlatform.DevTools.CommonControls.Service
             return properties;
         }
 
-        public bool Save(Dictionary<string, object> properties, string path)
+        public static bool Save(Dictionary<string, object> properties, string path, bool splitWithWhiteSpace = false)
         {
             var sb = new StringBuilder();
             foreach(var prop in properties)
@@ -105,7 +120,7 @@ namespace DevPlatform.DevTools.CommonControls.Service
                         {
                             if (idx > 0)
                             {
-                                if (InsertNewLineWhiteSpace) sb.Append(' ');
+                                if (splitWithWhiteSpace) sb.Append(' ');
                                 sb.AppendLine("\\");
                                 sb.Append(whitespace);
                             }
@@ -119,6 +134,16 @@ namespace DevPlatform.DevTools.CommonControls.Service
             File.WriteAllText(path, sb.ToString());
 
             return true;
+        }
+
+        public bool Load(string filename)
+        {
+            return Load(filename, this) != null;
+        }
+
+        public bool Save(string path)
+        {
+            return Save(this, path, SplitWithWhiteSpace);
         }
     }
 }

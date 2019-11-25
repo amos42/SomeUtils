@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace DevPlatform.DevTools.CommonControls.Service
+namespace CommonLib
 {
     public class ExtProperties : Dictionary<string, object>
     {
@@ -18,13 +18,13 @@ namespace DevPlatform.DevTools.CommonControls.Service
 
         public static Dictionary<string, object> Load(string filename, Dictionary<string, object> properties = null)
         {
-            if(!new FileInfo(filename).Exists)
+            if (!new FileInfo(filename).Exists)
             {
                 return null;
             }
 
             var rows = File.ReadAllLines(filename);
-            if(rows == null || !rows.Any())
+            if (rows == null || !rows.Any())
             {
                 return null;
             }
@@ -102,12 +102,12 @@ namespace DevPlatform.DevTools.CommonControls.Service
         public static bool Save(Dictionary<string, object> properties, string path, bool splitWithWhiteSpace = false)
         {
             var sb = new StringBuilder();
-            foreach(var prop in properties)
+            foreach (var prop in properties)
             {
                 if (prop.Value is string)
                 {
                     sb.AppendLine($"{prop.Key} = {prop.Value}");
-                } 
+                }
                 else {
                     var strLst = prop.Value as IEnumerable<string>;
                     if (strLst != null)
@@ -151,23 +151,21 @@ namespace DevPlatform.DevTools.CommonControls.Service
                 return new List<string> { source };
             }
 
-            string str = "";
-
             var strList = new List<string>();
 
             var charList = new StringBuilder();
             var srcChars = source.ToCharArray();
             int mode = 0;
-            foreach(var ch in srcChars)
+            foreach (var ch in srcChars)
             {
-                switch(mode)
+                switch (mode)
                 {
-                    case 0: if(ch != ' ' && ch != '\t')
+                    case 0: if (ch != ' ' && ch != '\t')
                         {
-                            if(ch == '\"')
+                            if (ch == '\"')
                             {
                                 mode = 2;
-                            } 
+                            }
                             else
                             {
                                 charList.Append(ch);
@@ -175,11 +173,15 @@ namespace DevPlatform.DevTools.CommonControls.Service
                             }
                         }
                         break;
-                    case 1: if(ch == ' ' || ch == '\t')
+                    case 1: if (ch == ' ' || ch == '\t')
                         {
                             strList.Add(charList.ToString());
                             charList.Clear();
                             mode = 0;
+                        } 
+                        else
+                        {
+                            charList.Append(ch);
                         }
                         break;
                     case 2:
@@ -188,6 +190,10 @@ namespace DevPlatform.DevTools.CommonControls.Service
                             strList.Add(charList.ToString());
                             charList.Clear();
                             mode = 0;
+                        }
+                        else
+                        {
+                            charList.Append(ch);
                         }
                         break;
                 }
@@ -217,18 +223,18 @@ namespace DevPlatform.DevTools.CommonControls.Service
 
             var values = new List<string>();
 
-            if(value is string)
+            if (value is string)
             {
                 return SplitString(value as string);
             } else
             {
                 var lst = value as IEnumerable<string>;
-                if (lst != null) 
-                { 
-                    foreach(var str in lst)
+                if (lst != null)
+                {
+                    foreach (var str in lst)
                     {
                         var l = SplitString(str); ;
-                        if(l != null)
+                        if (l != null)
                         {
                             values.AddRange(l);
                         }
@@ -237,6 +243,12 @@ namespace DevPlatform.DevTools.CommonControls.Service
             }
 
             return values;
+        }
+
+        public bool TryGetSpliteValue(string key, out object value)
+        {
+            value = GetSpliteValue(key);
+            return value != null;
         }
     }
 }

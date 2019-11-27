@@ -8,15 +8,18 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CommonLib
+namespace CommonLibs
 {
+    /// <summary>
+    /// Property 제공 라이브러리
+    /// </summary>
     public class ExtProperties : Dictionary<string, object>
     {
         //public bool InsertNewLineWhiteSpace { get; set; } = false;
 
         public bool SplitWithWhiteSpace { get; set; } = false;
 
-        public static Dictionary<string, object> Load(string filename, Dictionary<string, object> properties = null)
+        public static Dictionary<string, object> Load(string filename, Dictionary<string, object> properties = null, bool splitWithWhiteSpace = false)
         {
             if (!new FileInfo(filename).Exists)
             {
@@ -37,7 +40,7 @@ namespace CommonLib
             int mode = 0;
             string name = null;
             //var valueData = new StringBuilder();
-            var valueData = new List<String>();
+            var valueData = new StringBuilder();
             foreach (var row in rows)
             {
                 if (string.IsNullOrEmpty(row)) continue;
@@ -54,15 +57,15 @@ namespace CommonLib
                             var value = tokens[1].Trim();
                             if (value.EndsWith("\\"))
                             {
-                                valueData.Add(value.Substring(0, value.Length - 1));
+                                value = value.Substring(0, value.Length - 1);
+                                if (!String.IsNullOrEmpty(value))
+                                {
+                                    valueData.Append(value);
+                                }
                                 mode = 1;
                             }
                             else
                             {
-                                if (value.StartsWith("\"") && value.EndsWith("\""))
-                                {
-                                    value = value.Substring(1, value.Length - 2);
-                                }
                                 properties.Add(name, value);
                             }
                         }
@@ -75,13 +78,16 @@ namespace CommonLib
                                 trimRow = trimRow.Substring(0, trimRow.Length - 1);
                                 if (!String.IsNullOrEmpty(trimRow))
                                 {
-                                    valueData.Add(trimRow);
+                                    valueData.Append(trimRow);
                                 }
                             }
                             else
                             {
-                                valueData.Add(trimRow);
-                                var value = valueData.ToArray();
+                                if (!String.IsNullOrEmpty(trimRow))
+                                {
+                                    valueData.Append(trimRow);
+                                }
+                                var value = valueData.ToString();
                                 properties.Add(name, value);
                                 valueData.Clear();
                                 mode = 0;
@@ -91,9 +97,9 @@ namespace CommonLib
                         break;
                 }
             }
-            if (mode == 1 && valueData.Count > 0)
+            if (mode == 1)
             {
-                properties.Add(name, valueData.ToArray());
+                properties.Add(name, valueData.ToString());
             }
 
             return properties;
@@ -106,7 +112,8 @@ namespace CommonLib
             {
                 if (prop.Value is string)
                 {
-                    sb.AppendLine($"{prop.Key} = {prop.Value}");
+                    var value = prop.Value as string;
+                    sb.AppendLine($"{prop.Key} = {value}");
                 }
                 else {
                     var strLst = prop.Value as IEnumerable<string>;
@@ -124,7 +131,16 @@ namespace CommonLib
                                 sb.AppendLine("\\");
                                 sb.Append(whitespace);
                             }
-                            sb.Append(val);
+                            if (val.Contains(" "))
+                            {
+                                sb.Append('\"');
+                                sb.Append(val);
+                                sb.Append('\"');
+                            }
+                            else
+                            {
+                                sb.Append(val);
+                            }
                             idx++;
                         }
                         sb.AppendLine();
@@ -206,31 +222,22 @@ namespace CommonLib
             return strList;
         }
 
-        public bool Load(string filename)
+        public static IEnumerable<string> SplitValues(object value)
         {
-            return Load(filename, this) != null;
-        }
-
-        public bool Save(string path)
-        {
-            return Save(this, path, SplitWithWhiteSpace);
-        }
-
-        public IEnumerable<string> GetSpliteValue(string key)
-        {
-            if (!TryGetValue(key, out var value)) return null;
             if (value == null) return null;
 
-            var values = new List<string>();
+            List<string> values = null;
 
             if (value is string)
             {
                 return SplitString(value as string);
-            } else
+            }
+            else
             {
                 var lst = value as IEnumerable<string>;
-                if (lst != null)
+                if (lst != null && lst.Any())
                 {
+                    values = new List<string>();
                     foreach (var str in lst)
                     {
                         var l = SplitString(str); ;
@@ -245,10 +252,106 @@ namespace CommonLib
             return values;
         }
 
-        public bool TryGetSpliteValue(string key, out object value)
+        public static object JoinSplitValues(object value, bool splitWithWhiteSpace, int limitLine = 0)
         {
-            value = GetSpliteValue(key);
+            if (value == null) return null;
+
+            if (value is string)
+            {
+                var strValue = value as string;
+                return strValue;
+            }
+            else
+            {
+                var lst = value as IEnumerable<string>;
+                if (lst != null && lst.Any())
+                {
+                    if (limitLine < 0)
+                    {
+                        var values = new StringBuilder();
+                        foreach (var str in lst)
+                        {
+                            var strValue = str.Contains(" ") ? $"\"{str}\"" : str;
+                            if (splitWithWhiteSpace) strValue += " ";
+                            values.Append(strValue);
+                        }
+                        return values.ToString();
+                    }
+                    else
+                    {
+                        var values = new List<string>();
+                        foreach (var str in lst)
+                        {
+                            var strValue = str.Contains(" ") ? $"\"{str}\"" : str;
+                            if (splitWithWhiteSpace) strValue += " ";
+                            values.Add(strValue + "\\");
+                        }
+                        return values;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        public bool Load(string filename)
+        {
+            return Load(filename, this, SplitWithWhiteSpace) != null;
+        }
+
+        public bool Save(string path)
+        {
+            return Save(this, path, SplitWithWhiteSpace);
+        }
+
+        public bool TryGetStringValue(string key, out string value)
+        {
+            if (!TryGetValue(key, out object value0))
+            {
+                value = null;
+                return false;
+            }
+
+            var strValue = value0 as string;
+            if(strValue != null && strValue.StartsWith("\"") && strValue.EndsWith("\"")) 
+            {
+                strValue = strValue.Substring(1, strValue.Length - 2);
+            }
+
+            value = strValue;
             return value != null;
+        }
+
+        public bool TryGetSplitStringsValue(string key, out IEnumerable<string> values)
+        {
+            if (!TryGetValue(key, out var value))
+            {
+                values = null;
+                return false;
+            }
+            values = SplitValues(value);
+            return values != null;
+        }
+
+        public void SetStringValue(string key, string value)
+        {
+            if (value.Contains(" ") || value.Contains("\\"))
+            {
+                this[key] = $"\"{value}\"";
+            }
+            else 
+            {
+                this[key] = value;
+            }
+        }
+
+        public void SetSplitStringsValues(string key, object values, int lineLimit = 0)
+        {
+            var value = JoinSplitValues(values, SplitWithWhiteSpace, lineLimit);
+            if (value != null)
+            {
+                this[key] = value;
+            }
         }
     }
 }

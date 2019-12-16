@@ -1,8 +1,8 @@
 /*
 MacroUtil.cs : Macro 치환 문자열 처리
-Made by : gyeongmin.ju
-Created : 2019-04-24 오후 1:08:08
-Last Update : 2019-04-24 오후 1:08:08
+Made by : Amos42
+Created : 2017-04-24 오후 1:08:08
+Last Update : 2017-04-24 오후 1:08:08
 */
 using System;
 using System.Collections.Generic;
@@ -13,6 +13,14 @@ using System.Text;
 namespace DevPlatform.Base
 {
     /// <summary>
+    /// IRunner 인터페이스
+    /// </summary>
+    public interface IMacroRunner
+    {
+        string Run(string macroKey);
+    }
+
+    /// <summary>
     /// 문자열이나 숫자 배열을 다양한 형태의 데이터로 변환하는 유틸리티
     /// </summary>
     public static class MacroUtil
@@ -21,16 +29,6 @@ namespace DevPlatform.Base
         public const string DEFAULT_END_LITER = "}";
         public const string DEFAULT_NAMESPACE_SEP = ".";
         public const int BUFFER_SIZE = 1024 * 8;
-
-        //private static readonly ILogger logger = LoggerFactory.GetLogger();
-
-        /// <summary>
-        /// IRunner 인터페이스
-        /// </summary>
-        public interface IRunner
-        {
-            string Run(string macroKey);
-        }
 
         /// <summary>
         /// Stream 입력을 받아 매크로 프로세스를 진행합니다.
@@ -45,7 +43,7 @@ namespace DevPlatform.Base
         /// <param name="invalideStr">무효한 매크로일 경우 치환할 문자열</param>
         /// <returns>매크로 처리 결과 문자열</returns>
         public static int RunMacro(Stream inputStream, Stream outputStream, string startLiter, string endLiter,
-            string nameSpace, string nameSpaceSep, IRunner runner, string invalideStr)
+            string nameSpace, string nameSpaceSep, IMacroRunner runner, string invalideStr)
         {
             if (inputStream == null || outputStream == null) return 0;
 
@@ -72,8 +70,7 @@ namespace DevPlatform.Base
             }
             catch (IOException ex)
             {
-                ILogger logger = LoggerFactory.GetLogger();
-                logger?.Error(ex.Message, true);
+                //Console.WriteLine(ex.Message, e.Trace);
                 return 0;
             }
 
@@ -92,7 +89,7 @@ namespace DevPlatform.Base
         /// <param name="invalideStr">무효한 매크로일 경우 치환할 문자열</param>
         /// <returns>매크로 처리 결과 문자열</returns>
         public static string RunMacro(string source, string startLiter, string endLiter,
-            string nameSpace, string nameSpaceSep, IRunner runner, string invalideStr)
+            string nameSpace, string nameSpaceSep, IMacroRunner runner, string invalideStr)
         {
             if (String.IsNullOrEmpty(source) || startLiter == null || endLiter == null)
             {
@@ -193,7 +190,7 @@ namespace DevPlatform.Base
         /// <param name="endLiter">매크로 종료 식별 문자</param>
         /// <param name="runner">매크로 치환 수행 함수</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string RunMacro(string source, string startLiter, string endLiter, IRunner runner)
+        public static string RunMacro(string source, string startLiter, string endLiter, IMacroRunner runner)
         {
             return RunMacro(source, startLiter, endLiter, null, null, runner, null);
         }
@@ -201,7 +198,7 @@ namespace DevPlatform.Base
         /// <summary>
         /// 매크로 적용하는 IRunner 구현체
         /// </summary>
-        private class MacroRunner : IRunner
+        private class MacroRunner : IMacroRunner
         {
             private IDictionary<string, object> macros;
 
@@ -226,7 +223,7 @@ namespace DevPlatform.Base
         /// <summary>
         /// 매크로 컬렉션이 NameValueCollection일 경우의 IRunner 구현체
         /// </summary>
-        private class MacroRunner2 : IRunner
+        private class MacroRunner2 : IMacroRunner
         {
             private NameValueCollection macros;
 
@@ -261,7 +258,7 @@ namespace DevPlatform.Base
         /// <param name="invalideStr">무효한 매크로일 경우 치환할 문자열</param>
         /// <returns>매크로 처리 결과 문자열</returns>
         public static string ProcessMacro(string source, string startLiter, string endLiter,
-                string nameSpace, string nameSpaceSep, IRunner runner, string invalideStr)
+                string nameSpace, string nameSpaceSep, IMacroRunner runner, string invalideStr)
         {
             return RunMacro(source, startLiter, endLiter, nameSpace, nameSpaceSep, runner, invalideStr);
         }
@@ -279,7 +276,7 @@ namespace DevPlatform.Base
         /// <param name="invalideStr"></param>
         /// <returns>매크로 처리 결과 문자열</returns>
         public static int ProcessMacro(Stream inputStream, Stream outputStream, string startLiter, string endLiter,
-                string nameSpace, string nameSpaceSep, IRunner runner, string invalideStr)
+                string nameSpace, string nameSpaceSep, IMacroRunner runner, string invalideStr)
         {
             return RunMacro(inputStream, outputStream, startLiter, endLiter, nameSpace, nameSpaceSep, runner, invalideStr);
         }
@@ -292,7 +289,7 @@ namespace DevPlatform.Base
         /// <param name="endLiter">매크로 종료 식별 문자</param>
         /// <param name="runner">매크로 치환 수행 함수</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, string startLiter, string endLiter, IRunner runner)
+        public static string ProcessMacro(string source, string startLiter, string endLiter, IMacroRunner runner)
         {
             return RunMacro(source, startLiter, endLiter, null, null, runner, null);
         }
@@ -329,7 +326,7 @@ namespace DevPlatform.Base
         /// <param name="source">입력 문자열</param>
         /// <param name="runner">매크로 치환 수행 함수</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, IRunner runner)
+        public static string ProcessMacro(string source, IMacroRunner runner)
         {
             return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, runner);
         }

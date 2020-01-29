@@ -123,12 +123,13 @@ def applyChangeProject(projInfo, projDict):
        else:
          dic_ns[element] = root.nsmap[element]
 
-    framework = None
+    isChange = False
     if not projInfo.isTestProject:
         if projInfo.asmInfoPath == None:
             root.find("PropertyGroup/Version").text = convProjectVersion(projInfo.projRefInfo.newVersion)
             root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
             root.find("PropertyGroup/FileVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
+            isChange = True
         else:
             try:
                 f = open(projInfo.asmInfoPath, "r", encoding="utf-8")
@@ -162,10 +163,12 @@ def applyChangeProject(projInfo, projDict):
                         rv = pkg.find('Version', root.nsmap)
                         if rv != None:
                             rv.text = refInfo.newVersion
+                    isChange = True
                 break
     
-    #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, xml_declaration=True)
-    doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", doctype='<?xml version="1.0" encoding="utf-8"?>')
+    if isChange:
+        #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, xml_declaration=True)
+        doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", doctype='<?xml version="1.0" encoding="utf-8"?>')
 
     nuspecPath = os.path.join(projpath, "Module.nuspec")
     if os.path.exists(nuspecPath):
@@ -277,10 +280,10 @@ def convProjectVersion(version):
     if version == None: return "0.0.0"
     vers = version.split(".")
     l = len(vers)
-    if len == 3: return version
+    if l == 3: return version
     value = ""
     for i in range(0, 3):
-        if i < 3: v = vers[i]
+        if i < 3 and i < l: v = vers[i]
         else: v = "0"
         if value != "": value = value + "."
         value = value + v
@@ -291,10 +294,10 @@ def convAssemblyVersion(version):
     if version == None: return "0.0.0.0"
     vers = version.split(".")
     l = len(vers)
-    if len == 4: return version
+    if l == 4: return version
     value = ""
     for i in range(0, 4):
-        if i < 4: v = vers[i]
+        if i < 4 and i < l: v = vers[i]
         else: v = "0"
         if value != "": value = value + "."
         value = value + v

@@ -3,7 +3,21 @@ import os
 import re
 import shutil
 from lxml import etree
-import inspect
+import argparse
+
+
+def get_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(nargs=1, dest='solutionFilename', help='Example) Sample.sln')
+    parser.add_argument('--changemodules', '-c', nargs='+', default=[], metavar='"PackageName Version"', dest='changeModuleList', help='Example) "DevPlatfomr.Base 1.0.1 DevPlatfomr.DB 1.0.6')
+    parser.add_argument('--assemblychange', '-a', nargs=1, metavar='True/False', type=bool, dest='assemblyChange', default=False, help='Example) True')
+
+    solutionFilename = parser.parse_args().solutionFilename
+    changeModuleList = parser.parse_args().changeModuleList
+    assemblyChange = parser.parse_args().assemblyChange
+
+    return solutionFilename, changeModuleList, assemblyChange
+
 
 class ProjectRefInfo:
     #id = None
@@ -37,6 +51,8 @@ def getProjectInfo(projectFilename):
     projInfo = ProjectFileInfo()
     projInfo.isTestProject = projectFilename.endswith(".Test.csproj") or projectFilename.endswith(".Tests.csproj")
 
+    print("Analisys ", projectFilename, " ...")
+
     projectFilename = os.path.abspath(projectFilename)
     projInfo.projRefInfo.projectPath = projectFilename
 
@@ -51,14 +67,23 @@ def getProjectInfo(projectFilename):
        else:
          dic_ns[element] = root.nsmap[element]
 
-    assemblyName = root.find("PropertyGroup/AssemblyName", root.nsmap).text
+    assemblyName = None
+    assemVersion = None
+    assemFileVersion = None
+
+    assemblyNode = root.find("PropertyGroup/AssemblyName", root.nsmap)
+    if assemblyNode != None:
+        assemblyName = assemblyNode.text
+
     framework = None
     t = root.find("PropertyGroup/TargetFramework", root.nsmap)
     if t != None:
         framework = t.text
         version = root.find("PropertyGroup/Version").text
-        assemVersion = root.find("PropertyGroup/AssemblyVersion").text
-        assemFileVersion = root.find("PropertyGroup/FileVersion").text
+        assemVersionNode = root.find("PropertyGroup/AssemblyVersion")
+        if assemVersionNode != None: assemVersion = assemVersionNode.Text
+        assemFileVersionNode = root.find("PropertyGroup/FileVersion")
+        if assemFileVersionNode != None: assemFileVersion = assemFileVersionNode.Text
         projInfo.projRefInfo.id = assemblyName
         projInfo.projRefInfo.version = assemVersion
     else:
@@ -239,7 +264,7 @@ def getProjectInfoList(solutionFilename):
 
 def setProjectDict(projList):
     for proj in projList:
-        projectDict[proj.projRefInfo.id] = proj
+        if proj.projRefInfo.id != None: projectDict[proj.projRefInfo.id] = proj
         projectDict[proj.projRefInfo.projectPath] = proj
 
 
@@ -360,13 +385,11 @@ def applyChangeProjectList(projList, projDict):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < (3+1):
-        print("ApplyUpdateVersion.py <Solution File> <Module Name> <New Version>")
-        exit(1)
+    solutionFilename, changeModuleList, assemblyChange = get_arguments()
 
-    solutionFilename = sys.argv[1]
-    moduleName = sys.argv[2]
-    newVersion = sys.argv[3]
+    changeModuleInfo = changeModuleList.split(" ")
+    moduleName = changeModuleInfo[0]
+    newVersion = changeModuleInfo[1]
 
     projList = getProjectInfoList(solutionFilename)
 

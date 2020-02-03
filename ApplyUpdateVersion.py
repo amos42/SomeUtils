@@ -6,17 +6,17 @@ from lxml import etree
 import argparse
 
 
-def get_arguments():
+def getArguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument(nargs=1, dest='solutionFilename', help='Example) Sample.sln')
-    parser.add_argument('--changemodules', '-c', nargs='+', default=[], metavar='"PackageName Version"', dest='changeModuleList', help='Example) "DevPlatfomr.Base 1.0.1 DevPlatfomr.DB 1.0.6')
-    parser.add_argument('--assemblychange', '-a', nargs=1, metavar='True/False', type=bool, dest='assemblyChange', default=False, help='Example) True')
+    parser.add_argument(dest='solutionFilename', help='Example) Sample.sln')
+    parser.add_argument('--change-packages', '-c', nargs='+', default=[], metavar='"PackageName Version"', dest='changePackageList', help='Example) "DevPlatfomr.Base 1.0.1" "DevPlatfomr.DB 1.0.6"')
+    parser.add_argument('--assembly-change-packages', '-a', nargs='*', default=[], metavar='"PackageName"', dest='assemblyChangePackageList', help='Example) DevPlatfomr.Base DevPlatfomr.DB DevPlatfomr.DB.*')
 
     solutionFilename = parser.parse_args().solutionFilename
-    changeModuleList = parser.parse_args().changeModuleList
-    assemblyChange = parser.parse_args().assemblyChange
+    changePackageList = parser.parse_args().changePackageList
+    assemblyChangePackageList = parser.parse_args().assemblyChangePackageList
 
-    return solutionFilename, changeModuleList, assemblyChange
+    return solutionFilename, changePackageList, assemblyChangePackageList
 
 
 class ProjectRefInfo:
@@ -81,9 +81,9 @@ def getProjectInfo(projectFilename):
         framework = t.text
         version = root.find("PropertyGroup/Version").text
         assemVersionNode = root.find("PropertyGroup/AssemblyVersion")
-        if assemVersionNode != None: assemVersion = assemVersionNode.Text
+        if assemVersionNode != None: assemVersion = assemVersionNode.text
         assemFileVersionNode = root.find("PropertyGroup/FileVersion")
-        if assemFileVersionNode != None: assemFileVersion = assemFileVersionNode.Text
+        if assemFileVersionNode != None: assemFileVersion = assemFileVersionNode.text
         projInfo.projRefInfo.id = assemblyName
         projInfo.projRefInfo.version = assemVersion
     else:
@@ -136,7 +136,7 @@ def getProjectInfo(projectFilename):
     return projInfo
     
 
-def applyChangeProject(projInfo, projDict):
+def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
     projpath = os.path.dirname(projInfo.projRefInfo.projectPath)
 
     doc = etree.parse(projInfo.projRefInfo.projectPath)
@@ -151,8 +151,9 @@ def applyChangeProject(projInfo, projDict):
     isChange = False
     if not projInfo.isTestProject:
         if projInfo.asmInfoPath == None:
+            if projInfo.projRefInfo.id in assemblyChangePackageList:
+                root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
             root.find("PropertyGroup/Version").text = convProjectVersion(projInfo.projRefInfo.newVersion)
-            root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
             root.find("PropertyGroup/FileVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
             isChange = True
         else:
@@ -162,8 +163,10 @@ def applyChangeProject(projInfo, projDict):
                 #[assembly: AssemblyFileVersion("1.0.2.0")]    
                 allline = list()
                 for line in f:
-                    if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
-                        line = "[assembly: AssemblyVersion(\"" + convAssemblyVersion(projInfo.projRefInfo.newVersion) + "\")]\n"
+                    if proj.projRefInfo.id in assemblyChangePackageList:
+                        root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
+                        if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
+                            line = "[assembly: AssemblyVersion(\"" + convAssemblyVersion(projInfo.projRefInfo.newVersion) + "\")]\n"
                     elif re.match(r"\s*\[assembly:\s*AssemblyFileVersion\(\s*\".*\s*\"\)\]", line):
                         line = "[assembly: AssemblyFileVersion(\"" + convAssemblyVersion(projInfo.projRefInfo.newVersion) + "\")]\n"
                     allline.append(line)
@@ -241,6 +244,7 @@ def findProjectByPath(projLst, path):
 
 def getProjectInfoList(solutionFilename):
     #solutionFilename = os.path.abspath(solutionFilename)
+    print(solutionFilename)
     projList = list()
     try:
         f = open(solutionFilename, "r", encoding="utf-8")
@@ -378,30 +382,32 @@ def analizeProjectList(projList, projDict, changeList):
         if chageProjCnt <= 0: break
 
 
-def applyChangeProjectList(projList, projDict):
+def applyChangeProjectList(projList, projDict, assemblyChangePackageList):
     for proj in changelist:
         if proj.projRefInfo.projectPath == None: continue
-        applyChangeProject(proj, projDict)
+        applyChangeProject(proj, projDict, assemblyChangePackageList)
 
 
 if __name__ == '__main__':
-    solutionFilename, changeModuleList, assemblyChange = get_arguments()
-
-    changeModuleInfo = changeModuleList.split(" ")
-    moduleName = changeModuleInfo[0]
-    newVersion = changeModuleInfo[1]
+    solutionFilename, changePackageList, assemblyChangePackageList = getArguments()
 
     projList = getProjectInfoList(solutionFilename)
 
     setProjectDict(projList)
 
     changelist = list()
-    result = setProjectNewVersionByName(projectDict, moduleName, newVersion, changelist)
-    if not result:
-        proj = ProjectFileInfo()
-        proj.projRefInfo.id = moduleName
-        proj.projRefInfo.newVersion = newVersion
-        changelist.append(proj)
+    for changeModule in changePackageList:
+        changeModuleInfo = changeModule.split(" ")
+        moduleName = changeModuleInfo[0]
+        newVersion = changeModuleInfo[1]
+        print(" * ", moduleName, newVersion)
+
+        result = setProjectNewVersionByName(projectDict, moduleName, newVersion, changelist)
+        if not result:
+            proj = ProjectFileInfo()
+            proj.projRefInfo.id = moduleName
+            proj.projRefInfo.newVersion = newVersion
+            changelist.append(proj)
     
     analizeProjectList(projList, projectDict, changelist)
         
@@ -422,6 +428,6 @@ if __name__ == '__main__':
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
 
-    applyChangeProjectList(projList, projectDict)
+    applyChangeProjectList(projList, projectDict, assemblyChangePackageList)
 
     print("All Done.")

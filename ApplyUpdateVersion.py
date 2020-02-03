@@ -79,6 +79,7 @@ def getProjectInfo(projectFilename):
     t = root.find("PropertyGroup/TargetFramework", root.nsmap)
     if t != None:
         framework = t.text
+        assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
         version = root.find("PropertyGroup/Version").text
         assemVersionNode = root.find("PropertyGroup/AssemblyVersion")
         if assemVersionNode != None: assemVersion = assemVersionNode.text
@@ -150,6 +151,7 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
 
     isChange = False
     if not projInfo.isTestProject:
+        print(" ======== ", projInfo.asmInfoPath, projInfo.projRefInfo.id, assemblyChangePackageList)
         if projInfo.asmInfoPath == None:
             if projInfo.projRefInfo.id in assemblyChangePackageList:
                 root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)

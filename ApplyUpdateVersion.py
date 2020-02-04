@@ -2,9 +2,8 @@ import sys
 import os
 import re
 import shutil
-from lxml import etree
 import argparse
-
+import xml.etree.ElementTree as etree
 
 class ProjectRefInfo:
     #id = None
@@ -18,6 +17,8 @@ class ProjectRefInfo:
 
 class ProjectFileInfo:
     #projectInfo = None #ProjectVerInfo(None, None)
+    #assemblyVersion = None
+    #assemblyFileVersion = None
     #refPkgs = None # list()
     #refPrjs = None # list()
     #frameworkinfo = None
@@ -25,6 +26,8 @@ class ProjectFileInfo:
     #asmInfoPath = None
     def __init__(self):
         self.projRefInfo = ProjectRefInfo(None, None)
+        self.assemblyVersion = None
+        self.assemblyFileVersion = None
         self.refPkgs = list()
         self.refPrjs = list()
         self.frameworkinfo = None
@@ -60,79 +63,90 @@ def getProjectInfo(projectFilename):
 
     doc = etree.parse(projectFilename)
     root = doc.getroot()    
-    dic_ns = {}
-    for element in root.nsmap:
-       if element is None: 
-         dic_ns["foo"] = root.nsmap[None]
-       else:
-         dic_ns[element] = root.nsmap[element]
+    token = re.findall(r"^\{\s*(.*)\s*\}", root.tag)
+    if token: 
+        ns = {"": token[0]}
+        etree.register_namespace("", token[0])
+    else:
+        ns = None
 
     version = None
     assemblyName = None
     assemVersion = None 
     assemFileVersion = None
 
-    assemblyNode = root.find("PropertyGroup/AssemblyName", root.nsmap)
-    if assemblyNode != None:
-        assemblyName = assemblyNode.text
+    assemblyNode = root.find("PropertyGroup/AssemblyName", ns)
+    if assemblyNode != None: assemblyName = assemblyNode.text
+    assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
+    versionNode = root.find("PropertyGroup/Version", ns)
+    if versionNode != None: version = versionNode.text
+    else: version = "1.0.0"
 
     framework = None
-    t = root.find("PropertyGroup/TargetFramework", root.nsmap)
+    t = root.find("PropertyGroup/TargetFramework", ns)
     if t != None:
         framework = t.text
-        if assemblyName == None: assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
-        versionNode = root.find("PropertyGroup/Version")
-        if versionNode != None: version = versionNode.text
         assemVersionNode = root.find("PropertyGroup/AssemblyVersion")
-        if assemVersionNode != None: assemVersion = assemVersionNode.text
+        if assemVersionNode != None: assemblyVersion = assemVersionNode.text
+        else: assemblyVersion = "1.0.0.0"
         assemFileVersionNode = root.find("PropertyGroup/FileVersion")
-        if assemFileVersionNode != None: assemFileVersion = assemFileVersionNode.text
+        if assemFileVersionNode != None: assemblyFileVersion = assemFileVersionNode.text
+        else: assemblyFileVersion = version
         projInfo.projRefInfo.id = assemblyName
-        projInfo.projRefInfo.version = assemVersion
+        projInfo.projRefInfo.version = version
+        projInfo.assemblyVersion = assemblyVersion
+        projInfo.assemblyFileVersion = assemblyFileVersion
     else:
-        t = root.find("PropertyGroup/TargetFrameworkVersion", root.nsmap)
+        t = root.find("PropertyGroup/TargetFrameworkVersion", ns)
         if t != None:
+            assemblyVersion = None
+            assemblyFileVersion = None
             framework = "netframework" + t.text
-            assembly = doc.xpath("foo:ItemGroup/foo:Compile[contains(@Include,'AssemblyInfo.cs')]", namespaces=dic_ns)
-            if assembly != None and len(assembly) > 0:
-                assemFileName = assembly[0].attrib["Include"]
-                assemFileName = os.path.abspath(os.path.join(projpath, assemFileName))
-                projInfo.asmInfoPath = assemFileName
+            #assembly = doc.xpath("foo:ItemGroup/foo:Compile[contains(@Include,'AssemblyInfo.cs')]", namespaces=dic_ns)
+            assemblyInfoFileName = None
+            compiles = root.findall("ItemGroup/Compile", ns)
+            for compileNode in compiles:
+                incAttr = compileNode.attrib["Include"]
+                if (incAttr != None) and incAttr.endswith("AssemblyInfo.cs"):
+                    assemblyInfoFileName = incAttr
+                    break
+            if assemblyInfoFileName != None:
+                projInfo.asmInfoPath = os.path.abspath(os.path.join(projpath, assemblyInfoFileName))
                 try:
-                    f = open(assemFileName, "r", encoding="utf-8")
+                    f = open(projInfo.asmInfoPath, "r", encoding="utf-8")
                     #[assembly: AssemblyVersion("1.0.2.0")]
                     #[assembly: AssemblyFileVersion("1.0.2.0")]                
                     for line in f:
                         if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
-                            token = re.findall(r"\(\"\s*(.*)\s*\"\)", line)
-                            if len(token) >= 1: 
-                                assemVersion = token[0]
+                            token = re.findall(r"^\(\"\s*(.*)\s*\"\)", line)
+                            if token: assemblyVersion = token[0]
                         elif re.match(r"\s*\[assembly:\s*AssemblyFileVersion\(\s*\".*\s*\"\)\]", line):
-                            token = re.findall(r"\(\"\s*(.*)\s*\"\)", line)
-                            if len(token) >= 1: 
-                                assemFileVersion = token[0]
-                    projInfo.projRefInfo.id = assemblyName
-                    projInfo.projRefInfo.version = assemVersion
+                            token = re.findall(r"^\(\"\s*(.*)\s*\"\)", line)
+                            if token: assemblyFileVersion = token[0]
                 except PermissionError:
                     print("error")
                     pass
+                projInfo.projRefInfo.id = assemblyName
+                projInfo.projRefInfo.version = version
+                projInfo.assemblyVersion = assemblyVersion
+                projInfo.assemblyFileVersion = assemblyFileVersion
             else:
                 print("> Not found assembly")
 
     projInfo.frameworkinfo = framework
 
-    refpkgs = root.findall("ItemGroup/PackageReference", root.nsmap)
+    refpkgs = root.findall("ItemGroup/PackageReference", ns)
     for pkg in refpkgs: 
         refver = None
         if 'Version' in pkg.attrib:
             refver = pkg.attrib['Version']
         else:
-            rv = pkg.find('Version', root.nsmap)
+            rv = pkg.find('Version', ns)
             if rv != None:
                 refver = rv.text
         projInfo.refPkgs.append(ProjectRefInfo(pkg.attrib['Include'], refver))
 
-    refprojs = root.findall("ItemGroup/ProjectReference", root.nsmap)
+    refprojs = root.findall("ItemGroup/ProjectReference", ns)
     for proj in refprojs:
         projInfo.refPrjs.append(os.path.abspath(os.path.join(projpath, proj.attrib['Include'])))
 
@@ -144,28 +158,31 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
 
     doc = etree.parse(projInfo.projRefInfo.projectPath)
     root = doc.getroot()    
-    dic_ns = {}
-    for element in root.nsmap:
-       if element is None: 
-         dic_ns["foo"] = root.nsmap[None]
-       else:
-         dic_ns[element] = root.nsmap[element]
+    token = re.findall(r"^\{\s*(.*)\s*\}", root.tag)
+    if token: 
+        ns = {"": token[0]}
+        etree.register_namespace("", token[0])
+    else:
+        ns = None
 
     isChange = False
     if not projInfo.isTestProject:
         if projInfo.asmInfoPath == None:
             firstPropertiesNode = root.find("PropertyGroup")
+            if firstPropertiesNode == None:
+                firstPropertiesNode = etree.SubElement(root, "PropertyGroup")
+                firstPropertiesNode.tail = "\n"
             if projInfo.projRefInfo.id in assemblyChangePackageList:
-                root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
-            versionNode = root.find("PropertyGroup/Version")
+                firstPropertiesNode.find("AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
+            versionNode = firstPropertiesNode.find("Version")
             if versionNode == None:
-                versionNode = etree.Element("Version")
-                firstPropertiesNode.append(versionNode)
-            versionNode.text = convProjectVersion(projInfo.projRefInfo.newVersion)                
-            fileVersionNode = root.find("PropertyGroup/FileVersion")
+                versionNode = etree.SubElement(firstPropertiesNode, "Version")
+                versionNode.tail = "\n"
+            versionNode.text = convProjectVersion(projInfo.projRefInfo.newVersion)
+            fileVersionNode = firstPropertiesNode.find("FileVersion")
             if fileVersionNode == None:
-                fileVersionNode = etree.Element("FileVersion")
-                firstPropertiesNode.append(versionNode)
+                fileVersionNode = etree.SubElement(firstPropertiesNode, "FileVersion")
+                fileVersionNode.tail = "\n"
             fileVersionNode.text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
             isChange = True
         else:
@@ -176,7 +193,7 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
                 allline = list()
                 for line in f:
                     if (assemblyChangePackageList == None) or (projInfo.projRefInfo.id in assemblyChangePackageList):
-                        root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
+                        #root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
                         if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
                             line = "[assembly: AssemblyVersion(\"" + convAssemblyVersion(projInfo.projRefInfo.newVersion) + "\")]\n"
                     elif re.match(r"\s*\[assembly:\s*AssemblyFileVersion\(\s*\".*\s*\"\)\]", line):
@@ -190,7 +207,7 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
                 print("error")
                 pass
 
-    refpkgs = root.findall("ItemGroup/PackageReference", root.nsmap)
+    refpkgs = root.findall("ItemGroup/PackageReference", ns)
     for pkg in refpkgs: 
         refver = None
         pkgName = pkg.attrib['Include']
@@ -200,7 +217,7 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
                     if 'Version' in pkg.attrib:
                         pkg.attrib['Version'] = refInfo.newVersion
                     else:
-                        rv = pkg.find('Version', root.nsmap)
+                        rv = pkg.find('Version', ns)
                         if rv != None:
                             rv.text = refInfo.newVersion
                     isChange = True
@@ -208,7 +225,8 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
     
     if isChange:
         #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, xml_declaration=True)
-        doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", doctype='<?xml version="1.0" encoding="utf-8"?>')
+        #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, doctype='<?xml version="1.0" encoding="utf-8"?>')
+        doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", xml_declaration=True)
 
     nuspecPath = os.path.join(projpath, "Module.nuspec")
     if os.path.exists(nuspecPath):
@@ -237,7 +255,8 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
                         dep.attrib['version'] = refInfo.newVersion
                     isfind = True
                     break
-        doc.write(nuspecPath, encoding="utf-8", doctype='<?xml version="1.0" encoding="utf-8"?>')
+        #doc.write(nuspecPath, encoding="utf-8", pretty_print=True, doctype='<?xml version="1.0" encoding="utf-8"?>')
+        doc.write(nuspecPath, encoding="utf-8", xml_declaration=True)
 
 
 def getProject(projLst, moduleName):
@@ -263,7 +282,7 @@ def getProjectInfoList(solutionFilename):
         for line in f:
             if re.match(r"\s*Project\s*\(\s*\"\{.*\}\"\s*\)", line):
                 token = re.findall(r"=\s*\"([^\"]*)\"\s*,\s*\"([^\"]*)\"", line)
-                if len(token) >= 1: 
+                if token: 
                     projname = token[0][0]
                     filename = token[0][1]
                     if filename.endswith(".csproj"):
@@ -298,11 +317,32 @@ def addVersion(version, inc):
     return newVersion
 
 
+def incTailVersion(version):
+    if version == None: return None
+    vers = version.split("-")
+    if len(vers) >= 2:
+        ss = vers[1]
+        d = re.findall(r"(\d+)(?!.*\d)", ss)
+        if d:
+            ss = version[: len(version) - len(d)]
+            ss = ss + str(int(d[0]) + 1)
+        else:
+            ss = version + "2"
+        return ss
+    else:
+        d = re.findall(r"(\d+)(?!.*\d)", version)
+        ss = version[: len(version) - len(d)]
+        ss = ss + str(int(d[0]) + 1)
+        return ss
+
+
 def VersionCompare(version, baseVersion):
     if version == None: return -1
     if baseVersion == None: return 1
-    vers1 = version.split(".")
-    vers2 = baseVersion.split(".")
+    vers1_0 = version.split("-")
+    vers1 = vers1_0[0].split(".")
+    vers2_0 = baseVersion.split("-")
+    vers2 = vers2_0[0].split(".")
     l1 = len(vers1)
     l2 = len(vers2)
     l3 = l1
@@ -315,6 +355,33 @@ def VersionCompare(version, baseVersion):
 
         if v1 > v2: return 1
         elif v1 < v2: return -1
+
+    if len(vers1_0) < 2:
+        if len(vers2_0) < 2: return 0
+        else: return 1
+    else:
+        if len(vers2_0) < 2: return -1
+        else:
+            if vers1_0[1] == vers2_0[1]: return 0
+            d1 = re.findall(r"(\d+)(?!.*\d)", vers1_0[1])
+            ss1 = vers1_0[: len(vers1_0) - len(d1)]
+            d2 = re.findall(r"(\d+)(?!.*\d)", vers2_0[1])
+            ss2 = vers2_0[: len(vers2_0) - len(d2)]
+            if ss1 == ss2:
+                if d1 > d2: return 1
+                elif d1 < d2: return -1
+            else:
+                if ss1 == "alpha": sss1 = 1
+                elif ss1 == "beta": sss1 = 2
+                elif ss1 == "rc": sss1 = 3
+                else: sss1 = 0
+                if ss2 == "alpha": sss2 = 1
+                elif ss2 == "beta": sss2 = 2
+                elif ss2 == "rc": sss2 = 3
+                else: sss2 = 0
+                if sss1 > sss2: return 1
+                elif sss1 < sss2: return -1
+           
     return 0
 
 
@@ -334,6 +401,8 @@ def convProjectVersion(version):
 
 def convAssemblyVersion(version):
     if version == None: return "0.0.0.0"
+    vers = version.split("-")
+    version = vers[0]
     vers = version.split(".")
     l = len(vers)
     if l == 4: return version
@@ -371,7 +440,7 @@ def setProjectNewVersionByName(projDict, moduleName, newVersion, changeList):
 
 
 def analizeProjectList(projList, projDict, changeList):
-    if len(changeList) <= 0: return
+    if not changeList: return
 
     while True:
         chageProjCnt = 0
@@ -389,7 +458,7 @@ def analizeProjectList(projList, projDict, changeList):
                 if proj2 in changeList: chagenCnt = chagenCnt + 1
 
             if chagenCnt > 0:
-                setProjectNewVersion(proj, addVersion(proj.projRefInfo.version, "0.0.1"), changeList)
+                setProjectNewVersion(proj, incTailVersion(proj.projRefInfo.version), changeList)
                 chageProjCnt = chageProjCnt + 1
 
         if chageProjCnt <= 0: break

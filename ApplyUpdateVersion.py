@@ -6,19 +6,6 @@ from lxml import etree
 import argparse
 
 
-def getArguments():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(dest='solutionFilename', help='Example) Sample.sln')
-    parser.add_argument('--change-packages', '-c', nargs='+', default=[], metavar='"PackageName Version"', dest='changePackageList', help='Example) "DevPlatfomr.Base 1.0.1" "DevPlatfomr.DB 1.0.6"')
-    parser.add_argument('--assembly-change-packages', '-a', nargs='*', default=[], metavar='"PackageName"', dest='assemblyChangePackageList', help='Example) DevPlatfomr.Base DevPlatfomr.DB DevPlatfomr.DB.*')
-
-    solutionFilename = parser.parse_args().solutionFilename
-    changePackageList = parser.parse_args().changePackageList
-    assemblyChangePackageList = parser.parse_args().assemblyChangePackageList
-
-    return solutionFilename, changePackageList, assemblyChangePackageList
-
-
 class ProjectRefInfo:
     #id = None
     #version = None
@@ -47,6 +34,19 @@ class ProjectFileInfo:
 projectDict = dict()
 
 
+def getArguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(dest='solutionFilename', help='Example) Sample.sln')
+    parser.add_argument('--change-packages', '-c', nargs='+', default=[], metavar='"PackageName Version"', dest='changePackageList', help='Example) "DevPlatfomr.Base 1.0.1" "DevPlatfomr.DB 1.0.6"')
+    parser.add_argument('--assembly-change-packages', '-a', nargs='*', default=[], metavar='"PackageName"', dest='assemblyChangePackageList', help='Example) DevPlatfomr.Base DevPlatfomr.DB DevPlatfomr.DB.*')
+
+    solutionFilename = parser.parse_args().solutionFilename
+    changePackageList = parser.parse_args().changePackageList
+    assemblyChangePackageList = parser.parse_args().assemblyChangePackageList
+
+    return solutionFilename, changePackageList, assemblyChangePackageList
+
+
 def getProjectInfo(projectFilename):
     projInfo = ProjectFileInfo()
     projInfo.isTestProject = projectFilename.endswith(".Test.csproj") or projectFilename.endswith(".Tests.csproj")
@@ -67,8 +67,9 @@ def getProjectInfo(projectFilename):
        else:
          dic_ns[element] = root.nsmap[element]
 
+    version = None
     assemblyName = None
-    assemVersion = None
+    assemVersion = None 
     assemFileVersion = None
 
     assemblyNode = root.find("PropertyGroup/AssemblyName", root.nsmap)
@@ -79,8 +80,9 @@ def getProjectInfo(projectFilename):
     t = root.find("PropertyGroup/TargetFramework", root.nsmap)
     if t != None:
         framework = t.text
-        assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
-        version = root.find("PropertyGroup/Version").text
+        if assemblyName == None: assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
+        versionNode = root.find("PropertyGroup/Version")
+        if versionNode != None: version = versionNode.text
         assemVersionNode = root.find("PropertyGroup/AssemblyVersion")
         if assemVersionNode != None: assemVersion = assemVersionNode.text
         assemFileVersionNode = root.find("PropertyGroup/FileVersion")
@@ -151,12 +153,20 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
 
     isChange = False
     if not projInfo.isTestProject:
-        print(" ======== ", projInfo.asmInfoPath, projInfo.projRefInfo.id, assemblyChangePackageList)
         if projInfo.asmInfoPath == None:
+            firstPropertiesNode = root.find("PropertyGroup")
             if projInfo.projRefInfo.id in assemblyChangePackageList:
                 root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
-            root.find("PropertyGroup/Version").text = convProjectVersion(projInfo.projRefInfo.newVersion)
-            root.find("PropertyGroup/FileVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
+            versionNode = root.find("PropertyGroup/Version")
+            if versionNode == None:
+                versionNode = etree.Element("Version")
+                firstPropertiesNode.append(versionNode)
+            versionNode.text = convProjectVersion(projInfo.projRefInfo.newVersion)                
+            fileVersionNode = root.find("PropertyGroup/FileVersion")
+            if fileVersionNode == None:
+                fileVersionNode = etree.Element("FileVersion")
+                firstPropertiesNode.append(versionNode)
+            fileVersionNode.text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
             isChange = True
         else:
             try:
@@ -165,7 +175,7 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
                 #[assembly: AssemblyFileVersion("1.0.2.0")]    
                 allline = list()
                 for line in f:
-                    if proj.projRefInfo.id in assemblyChangePackageList:
+                    if (assemblyChangePackageList == None) or (projInfo.projRefInfo.id in assemblyChangePackageList):
                         root.find("PropertyGroup/AssemblyVersion").text = convAssemblyVersion(projInfo.projRefInfo.newVersion)
                         if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
                             line = "[assembly: AssemblyVersion(\"" + convAssemblyVersion(projInfo.projRefInfo.newVersion) + "\")]\n"
@@ -275,6 +285,7 @@ def setProjectDict(projList):
 
 
 def addVersion(version, inc):
+    if version == None: return inc
     vers = list(map(int, version.split(".")))
     incs = list(map(int, inc.split(".")))
     l1 = len(vers)
@@ -415,6 +426,7 @@ if __name__ == '__main__':
         
     print("---------------------------")
     for projInfo in changelist:
+        if projInfo.projRefInfo.projectPath == None: continue
         if projInfo.projRefInfo.newVersion == None: continue
         print("* project info :", projInfo.projRefInfo.id, projInfo.projRefInfo.version, " => ", projInfo.projRefInfo.newVersion)
         print("  * framework info :", projInfo.frameworkinfo)

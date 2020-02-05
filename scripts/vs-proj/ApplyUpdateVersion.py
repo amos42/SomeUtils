@@ -68,7 +68,8 @@ def analizeProjectList(projList, projDict, changeList):
                 if proj2 in changeList: chagenCnt = chagenCnt + 1
 
             if chagenCnt > 0:
-                setProjectNewVersion(proj, vsver.incTailVersion(proj.projRefInfo.version), changeList)
+                newVersion = proj.projRefInfo.version.clone().incTailVersion()
+                setProjectNewVersion(proj, newVersion, changeList)
                 chageProjCnt = chageProjCnt + 1
 
         if chageProjCnt <= 0: break
@@ -83,8 +84,8 @@ if __name__ == '__main__':
     for changeModule in changePackageList:
         changeModuleInfo = changeModule.split(" ")
         moduleName = changeModuleInfo[0]
-        newVersion = changeModuleInfo[1]
-        print("> ", moduleName, newVersion)
+        newVersion = vsver.SemVersion(changeModuleInfo[1])
+        print("> ", moduleName, newVersion.toString())
 
         result = setProjectNewVersionByName(solInfo.projectDict, moduleName, newVersion, changelist)
         if not result:
@@ -97,19 +98,19 @@ if __name__ == '__main__':
         
     print("---------------------------")
     for projInfo in changelist:
-        if projInfo.projRefInfo.projectPath == None: continue
-        if projInfo.projRefInfo.newVersion == None: continue
+        if not projInfo.projRefInfo.projectPath: continue
+        if not projInfo.projRefInfo.newVersion: continue
         print("* project info :", projInfo.projRefInfo.id, projInfo.projRefInfo.version, " => ", projInfo.projRefInfo.newVersion)
         print("  * framework info :", projInfo.frameworkinfo)
         print("  * project path :", projInfo.projRefInfo.projectPath)
         print("  * assembly info path :", projInfo.asmInfoPath)
         print("  * ref packages:")
         for proj in projInfo.refPkgs:
-            print("   > ", proj.id, proj.version, " => ", proj.newVersion)
+            print("   > ", proj.id, proj.version.toString(), " => ", proj.newVersion.toString())
         print("  * ref projects:")
         for proj0 in projInfo.refPrjs:
             proj = solInfo.projectDict[proj0].projRefInfo
-            print("   > ", proj.id, proj.version, " => ", proj.newVersion)
+            print("   > ", proj.id, proj.version.toString(), " => ", proj.newVersion.toString())
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
 

@@ -3,12 +3,8 @@ import os
 import re
 import shutil
 import argparse
-import xml.etree.ElementTree as etree
 import _vs_proj_util as vsproj
 import _vs_version_util as vsver
-
-
-projectDict = dict()
 
 
 def getArguments():
@@ -85,7 +81,8 @@ if __name__ == '__main__':
 
     projList = vsproj.getProjectInfoList(solutionFilename)
 
-    setProjectDict(projList, projectDict)
+    projDict = dict()
+    setProjectDict(projList, projDict)
 
     changelist = list()
     for changeModule in changePackageList:
@@ -94,14 +91,14 @@ if __name__ == '__main__':
         newVersion = changeModuleInfo[1]
         print("> ", moduleName, newVersion)
 
-        result = setProjectNewVersionByName(projectDict, moduleName, newVersion, changelist)
+        result = setProjectNewVersionByName(projDict, moduleName, newVersion, changelist)
         if not result:
             proj = vsproj.ProjectFileInfo()
             proj.projRefInfo.id = moduleName
             proj.projRefInfo.newVersion = newVersion
             changelist.append(proj)
     
-    analizeProjectList(projList, projectDict, changelist)
+    analizeProjectList(projList, projDict, changelist)
         
     print("---------------------------")
     for projInfo in changelist:
@@ -116,11 +113,11 @@ if __name__ == '__main__':
             print("   > ", proj.id, proj.version, " => ", proj.newVersion)
         print("  * ref projects:")
         for proj0 in projInfo.refPrjs:
-            proj = projectDict[proj0].projRefInfo
+            proj = projDict[proj0].projRefInfo
             print("   > ", proj.id, proj.version, " => ", proj.newVersion)
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
 
-    vsproj.applyChangeProjectList(changelist, projectDict, assemblyChangePackageList)
+    vsproj.applyChangeProjectList(changelist, projDict, assemblyChangePackageList)
 
     print("All Done.")

@@ -1,7 +1,6 @@
 import sys
 import os
 import re
-import shutil
 import xml.etree.ElementTree as etree
 import _vs_version_util as vsver
 
@@ -36,7 +35,7 @@ class ProjectFileInfo:
         self.isTestProject = False
 
 
-def getProjectInfo(projectFilename):
+def getProjectInfo(projectFilename): # return ProjectFileInfo
     projInfo = ProjectFileInfo()
     projInfo.isTestProject = projectFilename.endswith(".Test.csproj") or projectFilename.endswith(".Tests.csproj")
 
@@ -139,7 +138,7 @@ def getProjectInfo(projectFilename):
     return projInfo
     
 
-def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
+def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
     projpath = os.path.dirname(projInfo.projRefInfo.projectPath)
 
     doc = etree.parse(projInfo.projRefInfo.projectPath)
@@ -216,50 +215,6 @@ def applyChangeProject(projInfo, projDict, assemblyChangePackageList):
 
     nuspecPath = os.path.join(projpath, "Module.nuspec")
     updateNugetRefs(projInfo, nuspecPath, projDict)
-
-
-def getProjectInfoList(solutionFilename):
-    #solutionFilename = os.path.abspath(solutionFilename)
-    print(solutionFilename)
-    projList = list()
-    try:
-        f = open(solutionFilename, "r", encoding="utf-8")
-        for line in f:
-            if re.match(r"\s*Project\s*\(\s*\"\{.*\}\"\s*\)", line):
-                token = re.findall(r"=\s*\"([^\"]*)\"\s*,\s*\"([^\"]*)\"", line)
-                if token: 
-                    projname = token[0][0]
-                    filename = token[0][1]
-                    if filename.endswith(".csproj"):
-                        slnPath = os.path.dirname(solutionFilename)
-                        filename = os.path.join(slnPath, filename)
-                        projList.append(getProjectInfo(filename))
-                #print(token)
-    except PermissionError:
-        print("error")
-        return null
-
-    return projList
-
-
-def applyChangeProjectList(projList, projDict, assemblyChangePackageList):
-    for proj in projList:
-        if proj.projRefInfo.projectPath == None: continue
-        applyChangeProject(proj, projDict, assemblyChangePackageList)
-
-
-def getProject(projLst, moduleName):
-    for proj in projLst:
-        if proj.projRefInfo.id == moduleName: 
-            return proj
-    return None
-
-
-def findProjectByPath(projLst, path):
-    for proj in projLst:
-        if proj.projRefInfo.projectPath == path: 
-            return proj
-    return None
 
 
 def updateNugetRefs(projInfo, nuspecPath, projDict):

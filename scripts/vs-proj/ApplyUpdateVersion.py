@@ -1,9 +1,8 @@
 import sys
 import os
-import re
-import shutil
 import argparse
-import _vs_proj_util as vsproj
+import _vs_project_util as vsproj
+import _vs_solution_util as vssol
 import _vs_version_util as vsver
 
 
@@ -18,13 +17,6 @@ def getArguments():
     assemblyChangePackageList = parser.parse_args().assemblyChangePackageList
 
     return solutionFilename, changePackageList, assemblyChangePackageList
-
-
-def setProjectDict(projList, projDict):
-    projDict.clear()
-    for proj in projList:
-        if proj.projRefInfo.id != None: projDict[proj.projRefInfo.id] = proj
-        projDict[proj.projRefInfo.projectPath] = proj
 
 
 def setNewVersion(refInfo, newVersion):
@@ -49,6 +41,12 @@ def setProjectNewVersionByName(projDict, moduleName, newVersion, changeList):
     proj = projDict.get(moduleName)
     if proj == None: return False
     return setProjectNewVersion(proj, newVersion, changeList)
+
+
+def applyChangeProjectList(changeList, projDict, assemblyChangePackageList):
+    for proj in changeList:
+        if proj.projRefInfo.projectPath == None: continue
+        vsproj.updateProjectInfo(proj, projDict, assemblyChangePackageList)
 
 
 def analizeProjectList(projList, projDict, changeList):
@@ -79,10 +77,7 @@ def analizeProjectList(projList, projDict, changeList):
 if __name__ == '__main__':
     solutionFilename, changePackageList, assemblyChangePackageList = getArguments()
 
-    projList = vsproj.getProjectInfoList(solutionFilename)
-
-    projDict = dict()
-    setProjectDict(projList, projDict)
+    solInfo = vssol.getSolutionInfo(solutionFilename)
 
     changelist = list()
     for changeModule in changePackageList:
@@ -91,14 +86,14 @@ if __name__ == '__main__':
         newVersion = changeModuleInfo[1]
         print("> ", moduleName, newVersion)
 
-        result = setProjectNewVersionByName(projDict, moduleName, newVersion, changelist)
+        result = setProjectNewVersionByName(solInfo.projectDict, moduleName, newVersion, changelist)
         if not result:
             proj = vsproj.ProjectFileInfo()
             proj.projRefInfo.id = moduleName
             proj.projRefInfo.newVersion = newVersion
             changelist.append(proj)
     
-    analizeProjectList(projList, projDict, changelist)
+    analizeProjectList(solInfo.projectList, solInfo.projectDict, changelist)
         
     print("---------------------------")
     for projInfo in changelist:
@@ -113,11 +108,11 @@ if __name__ == '__main__':
             print("   > ", proj.id, proj.version, " => ", proj.newVersion)
         print("  * ref projects:")
         for proj0 in projInfo.refPrjs:
-            proj = projDict[proj0].projRefInfo
+            proj = solInfo.projectDict[proj0].projRefInfo
             print("   > ", proj.id, proj.version, " => ", proj.newVersion)
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
 
-    vsproj.applyChangeProjectList(changelist, projDict, assemblyChangePackageList)
+    applyChangeProjectList(changelist, solInfo.projectDict, assemblyChangePackageList)
 
     print("All Done.")

@@ -223,9 +223,8 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
                 #[assembly: AssemblyFileVersion("1.0.2.0")]    
                 allline = list()
                 for line in f:
-                    if (assemblyChangePackageList == None) or (projInfo.projRefInfo.id in assemblyChangePackageList):
-                        #root.find("PropertyGroup/AssemblyVersion").text = vsver.convAssemblyVersion(projInfo.projRefInfo.newVersion)
-                        if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
+                    if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
+                        if assemblyChangePackageList and (projInfo.projRefInfo.id in assemblyChangePackageList):
                             line = "[assembly: AssemblyVersion(\"" + projInfo.projRefInfo.newVersion.toString(4) + "\")]\n"
                     elif re.match(r"\s*\[assembly:\s*AssemblyFileVersion\(\s*\".*\s*\"\)\]", line):
                         line = "[assembly: AssemblyFileVersion(\"" + projInfo.projRefInfo.newVersion.toString(4) + "\")]\n"

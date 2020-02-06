@@ -20,11 +20,11 @@ def getArguments():
 
 
 def setNewVersion(refInfo, newVersion):
-    if newVersion == None: return False
-    curVersion = refInfo.newVersion
-    if curVersion == None: curVersion = refInfo.version
+    if (newVersion == None) or not newVersion.core: return False
+    if (refInfo.newVersion != None) and not refInfo.newVersion.core: curVersion = refInfo.newVersion
+    else: curVersion = refInfo.version
     if vsver.VersionCompare(newVersion, curVersion) > 0:
-        refInfo.newVersion = newVersion
+        refInfo.newVersion = newVersion.clone()
         return True
     else:
         return False
@@ -32,8 +32,9 @@ def setNewVersion(refInfo, newVersion):
 
 def setProjectNewVersion(project, newVersion, changeList):
     result = setNewVersion(project.projRefInfo, newVersion)
-    if result and changeList != None:
-        changeList.append(project)
+    if result == True:
+        if not (project in changeList):
+            changeList.append(project)
     return result
 
 
@@ -53,26 +54,33 @@ def analizeProjectList(projList, projDict, changeList):
     if not changeList: return
 
     while True:
-        chageProjCnt = 0
+        changeProjCnt = 0
+
         for proj in projList:
             if proj in changeList: continue
 
-            chagenCnt = 0
+            changeCnt = 0
             for ref in proj.refPkgs:
                 for prj2 in changeList:
                     if ref.id == prj2.projRefInfo.id:
-                        if setNewVersion(ref, prj2.projRefInfo.newVersion): chagenCnt = chagenCnt + 1
+                        if setNewVersion(ref, prj2.projRefInfo.newVersion): changeCnt = changeCnt + 1
                         break
-            for ref in proj.refPrjs:
-                proj2 = projDict[ref]
-                if proj2 in changeList: chagenCnt = chagenCnt + 1
+            if changeCnt <= 0:
+                for ref in proj.refPrjs:
+                    proj2 = projDict[ref]
+                    if proj2 in changeList: 
+                        changeCnt = changeCnt + 1
+                        break
+            if changeCnt > 0:
+                if proj.projRefInfo.version != None:
+                    newVersion = proj.projRefInfo.version.clone()
+                    newVersion.incTailVersion()
+                else:
+                    newVersion = vsver.SemVersion("1.0.1")
+                if setProjectNewVersion(proj, newVersion, changeList):
+                    changeProjCnt = changeProjCnt + 1
 
-            if chagenCnt > 0:
-                newVersion = proj.projRefInfo.version.clone().incTailVersion()
-                setProjectNewVersion(proj, newVersion, changeList)
-                chageProjCnt = chageProjCnt + 1
-
-        if chageProjCnt <= 0: break
+        if changeProjCnt <= 0: break
 
 
 if __name__ == '__main__':
@@ -99,18 +107,18 @@ if __name__ == '__main__':
     print("---------------------------")
     for projInfo in changelist:
         if not projInfo.projRefInfo.projectPath: continue
-        if not projInfo.projRefInfo.newVersion: continue
-        print("* project info :", projInfo.projRefInfo.id, projInfo.projRefInfo.version, " => ", projInfo.projRefInfo.newVersion)
+        if (projInfo.projRefInfo.newVersion == None) or (not projInfo.projRefInfo.newVersion.core): continue
+        print("* project info :", projInfo.projRefInfo.toString())
         print("  * framework info :", projInfo.frameworkinfo)
         print("  * project path :", projInfo.projRefInfo.projectPath)
         print("  * assembly info path :", projInfo.asmInfoPath)
         print("  * ref packages:")
-        for proj in projInfo.refPkgs:
-            print("   > ", proj.id, proj.version.toString(), " => ", proj.newVersion.toString())
+        for pkg in projInfo.refPkgs:
+            print("   >", pkg.toString())
         print("  * ref projects:")
         for proj0 in projInfo.refPrjs:
             proj = solInfo.projectDict[proj0].projRefInfo
-            print("   > ", proj.id, proj.version.toString(), " => ", proj.newVersion.toString())
+            print("   >", proj.toString())
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
 

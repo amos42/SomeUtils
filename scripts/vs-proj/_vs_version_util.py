@@ -1,4 +1,5 @@
 import re
+import copy
 
 
 #^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$
@@ -14,7 +15,7 @@ class SemVersion:
         self.setVersionString(versionStr)
 
     def clone(self):
-        newVer = SemVersion(self.toString())
+        newVer = copy.deepcopy(self)
         return newVer
 
     def setVersionString(self, versionStr, coreLen = 0):
@@ -54,18 +55,18 @@ class SemVersion:
         for i in range(0, l1):
             if i < l2: self.core[i] += incVer.core[i]
 
-    def incTailVersion(self):
+    def incTailVersion(self, inc = 1):
         if self.preRelease:
             d = re.findall(r"(\d+)(?!.*\d)", self.preRelease)
             if d:
                 ss = self.preRelease[: len(self.preRelease) - len(d)]
-                ss = ss + str(int(d[0]) + 1)
+                ss = ss + str(int(d[0]) + inc)
             else:
-                ss = self.preRelease + "2"
+                ss = self.preRelease + str(1 + inc)
             self.preRelease = ss
         else:
             v = self.core[len(self.core) - 1]
-            self.core[len(self.core) - 1] = v + 1
+            self.core[len(self.core) - 1] = v + inc
 
 
 def VersionCompare(version, baseVersion):

@@ -285,7 +285,7 @@ def updateNugetRefs(projInfo, nuspecPath, projDict):
         for refInfo in projInfo.refPkgs:
             if refInfo.id == id:
                 if vsver.VersionCompare(refInfo.newVersion, refInfo.version) > 0:
-                    dep.attrib['version'] = refInfo.newVersion
+                    dep.attrib['version'] = refInfo.newVersion.toString(3)
                 isfind = True
                 break
         if isfind: continue
@@ -293,7 +293,7 @@ def updateNugetRefs(projInfo, nuspecPath, projDict):
             refInfo = projDict[refpath].projRefInfo
             if refInfo.id == id:
                 if vsver.VersionCompare(refInfo.newVersion, refInfo.version) > 0:
-                    dep.attrib['version'] = refInfo.newVersion
+                    dep.attrib['version'] = refInfo.newVersion.toString(3)
                 break
 
     #doc.write(nuspecPath, encoding="utf-8", pretty_print=True, doctype='<?xml version="1.0" encoding="utf-8"?>')

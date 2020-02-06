@@ -38,6 +38,18 @@ def setProjectNewVersion(project, newVersion, changeList):
     return result
 
 
+def incProjectVersion(project, changeList):
+    if (project.projRefInfo.newVersion == None) or (not project.projRefInfo.newVersion.core):
+        if project.projRefInfo.version != None:
+            newVersion = project.projRefInfo.version.clone()
+            newVersion.incTailVersion()
+        else:
+            newVersion = vsver.SemVersion("1.0.1")
+        return setProjectNewVersion(project, newVersion, changeList)
+    else:
+        return False
+
+
 def setProjectNewVersionByName(projDict, moduleName, newVersion, changeList):
     proj = projDict.get(moduleName)
     if proj == None: return False
@@ -57,7 +69,7 @@ def analizeProjectList(projList, projDict, changeList):
         changeProjCnt = 0
 
         for proj in projList:
-            if proj in changeList: continue
+            #if proj in changeList: continue
 
             changeCnt = 0
             for ref in proj.refPkgs:
@@ -72,13 +84,7 @@ def analizeProjectList(projList, projDict, changeList):
                         changeCnt = changeCnt + 1
                         break
             if changeCnt > 0:
-                if proj.projRefInfo.version != None:
-                    newVersion = proj.projRefInfo.version.clone()
-                    newVersion.incTailVersion()
-                else:
-                    newVersion = vsver.SemVersion("1.0.1")
-                if setProjectNewVersion(proj, newVersion, changeList):
-                    changeProjCnt = changeProjCnt + 1
+                if incProjectVersion(proj, changeList): changeProjCnt = changeProjCnt + 1
 
         if changeProjCnt <= 0: break
 

@@ -15,6 +15,17 @@ class ProjectRefInfo:
         self.version = version
         self.newVersion = None        
 
+    def toString(self):
+        if self.id != None: i = self.id
+        else: i = "None"
+        if self.version != None: v = self.version.toString()
+        else: v = "None"
+        if self.newVersion != None: 
+            return i + " (" + v + " => " + self.newVersion.toString() + ")"
+        else:
+            return i + " (" + v + ")"
+        
+
 class ProjectFileInfo:
     #projectInfo = None #ProjectVerInfo(None, None)
     #assemblyVersion = None
@@ -35,11 +46,17 @@ class ProjectFileInfo:
         self.isTestProject = False
 
 
+def findRefInfo(refInfoList, refId):
+    if not refInfoList: return None
+    for refInfo in refInfoList:
+        if refInfo.id == refId: return refInfo
+    return None
+
 def getProjectInfo(projectFilename): # return ProjectFileInfo
     projInfo = ProjectFileInfo()
     projInfo.isTestProject = projectFilename.endswith(".Test.csproj") or projectFilename.endswith(".Tests.csproj")
 
-    print("Analisys ", projectFilename, " ...")
+    print("Analisys", projectFilename, "...")
 
     projectFilename = os.path.abspath(projectFilename)
     projInfo.projRefInfo.projectPath = projectFilename
@@ -50,7 +67,7 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
     root = doc.getroot()    
     token = re.findall(r"^\{\s*(.*)\s*\}", root.tag)
     if token: 
-        ns = {"": token[0]}
+        ns = {"vsproj": token[0]}
         etree.register_namespace("", token[0])
     else:
         ns = None
@@ -60,15 +77,24 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
     assemVersion = None 
     assemFileVersion = None
 
-    assemblyNode = root.find("PropertyGroup/AssemblyName", ns)
+    if ns != None:
+        assemblyNode = root.find("vsproj:PropertyGroup/vsproj:AssemblyName", ns)
+    else:
+        assemblyNode = root.find("PropertyGroup/AssemblyName")
     if assemblyNode != None: assemblyName = assemblyNode.text
-    assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
-    versionNode = root.find("PropertyGroup/Version", ns)
+    else: assemblyName = os.path.splitext(os.path.basename(projectFilename))[0]
+    if ns != None:
+        versionNode = root.find("vsproj:PropertyGroup/vsproj:Version", ns)
+    else:
+        versionNode = root.find("PropertyGroup/Version")
     if versionNode != None: version = vsver.SemVersion(versionNode.text)
     else: version = vsver.SemVersion("1.0.0")
 
     framework = None
-    t = root.find("PropertyGroup/TargetFramework", ns)
+    if ns != None:
+        t = root.find("vsproj:PropertyGroup/vsproj:TargetFramework", ns)
+    else:
+        t = root.find("PropertyGroup/TargetFramework")
     if t != None:
         framework = t.text
         assemVersionNode = root.find("PropertyGroup/AssemblyVersion")
@@ -82,14 +108,20 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
         projInfo.assemblyVersion = assemblyVersion
         projInfo.assemblyFileVersion = assemblyFileVersion
     else:
-        t = root.find("PropertyGroup/TargetFrameworkVersion", ns)
+        if ns != None:
+            t = root.find("vsproj:PropertyGroup/vsproj:TargetFrameworkVersion", ns)
+        else:
+            t = root.find("PropertyGroup/TargetFrameworkVersion")
         if t != None:
             assemblyVersion = None
             assemblyFileVersion = None
             framework = "netframework" + t.text
             #assembly = doc.xpath("foo:ItemGroup/foo:Compile[contains(@Include,'AssemblyInfo.cs')]", namespaces=dic_ns)
             assemblyInfoFileName = None
-            compiles = root.findall("ItemGroup/Compile", ns)
+            if ns != None:
+                compiles = root.findall("vsproj:ItemGroup/vsproj:Compile", ns)
+            else:
+                compiles = root.findall("ItemGroup/Compile")
             for compileNode in compiles:
                 incAttr = compileNode.attrib["Include"]
                 if (incAttr != None) and incAttr.endswith("AssemblyInfo.cs"):
@@ -103,10 +135,10 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
                     #[assembly: AssemblyFileVersion("1.0.2.0")]                
                     for line in f:
                         if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
-                            token = re.findall(r"^\(\"\s*(.*)\s*\"\)", line)
+                            token = re.findall(r"\(\"\s*(.*)\s*\"\)", line)
                             if token: assemblyVersion = vsver.SemVersion(token[0], 4)
                         elif re.match(r"\s*\[assembly:\s*AssemblyFileVersion\(\s*\".*\s*\"\)\]", line):
-                            token = re.findall(r"^\(\"\s*(.*)\s*\"\)", line)
+                            token = re.findall(r"\(\"\s*(.*)\s*\"\)", line)
                             if token: assemblyFileVersion = vsver.SemVersion(token[0], 4)
                 except PermissionError:
                     print("error")
@@ -120,19 +152,28 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
 
     projInfo.frameworkinfo = framework
 
-    refpkgs = root.findall("ItemGroup/PackageReference", ns)
+    if ns != None:
+        refpkgs = root.findall("vsproj:ItemGroup/vsproj:PackageReference", ns)
+    else:
+        refpkgs = root.findall("ItemGroup/PackageReference")
     for pkg in refpkgs: 
         refver = None
         if 'Version' in pkg.attrib:
             refver = pkg.attrib['Version']
         else:
-            rv = pkg.find('Version', ns)
+            if ns != None:
+                rv = pkg.find('vsproj:Version', ns)
+            else:
+                rv = pkg.find('Version')
             if rv != None:
                 refver = rv.text
         if not refver: refver = "1.0.0"
         projInfo.refPkgs.append(ProjectRefInfo(pkg.attrib['Include'], vsver.SemVersion(refver)))
 
-    refprojs = root.findall("ItemGroup/ProjectReference", ns)
+    if ns != None:
+        refprojs = root.findall("vsproj:ItemGroup/vsproj:ProjectReference", ns)
+    else:
+        refprojs = root.findall("ItemGroup/ProjectReference")
     for proj in refprojs:
         projInfo.refPrjs.append(os.path.abspath(os.path.join(projpath, proj.attrib['Include'])))
 
@@ -146,7 +187,7 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
     root = doc.getroot()    
     token = re.findall(r"^\{\s*(.*)\s*\}", root.tag)
     if token: 
-        ns = {"": token[0]}
+        ns = {"vsproj": token[0]}
         etree.register_namespace("", token[0])
     else:
         ns = None
@@ -159,21 +200,21 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
                 firstPropertiesNode = etree.SubElement(root, "PropertyGroup")
                 firstPropertiesNode.tail = "\n"
             if projInfo.projRefInfo.id in assemblyChangePackageList:
-                aseVersionNode = firstPropertiesNode.find("AssemblyVersion")
-                if not aseVersionNode:
-                    aseVersionNode = etree.SubElement(firstPropertiesNode, "AssemblyVersion")
-                    aseVersionNode.tail = "\n"
-                versionNode.text = vsver.convProjectVersion(projInfo.projRefInfo.newVersion.toString(4))
-            versionNode = firstPropertiesNode.find("Version")
-            if not versionNode:
+                asemVersionNode = root.find("PropertyGroup/AssemblyVersion")
+                if asemVersionNode == None:
+                    asemVersionNode = etree.SubElement(firstPropertiesNode, "AssemblyVersion")
+                    asemVersionNode.tail = "\n"
+                asemVersionNode.text = projInfo.projRefInfo.newVersion.toString(4)
+            versionNode = root.find("PropertyGroup/Version")
+            if versionNode == None:
                 versionNode = etree.SubElement(firstPropertiesNode, "Version")
                 versionNode.tail = "\n"
-            versionNode.text = vsver.convProjectVersion(projInfo.projRefInfo.newVersion.toString(3))
-            fileVersionNode = firstPropertiesNode.find("FileVersion")
-            if not fileVersionNode:
+            versionNode.text = projInfo.projRefInfo.newVersion.toString(3)
+            fileVersionNode = root.find("PropertyGroup/FileVersion")
+            if fileVersionNode == None:
                 fileVersionNode = etree.SubElement(firstPropertiesNode, "FileVersion")
                 fileVersionNode.tail = "\n"
-            fileVersionNode.text = vsver.convAssemblyVersion(projInfo.projRefInfo.newVersion.toString(4))
+            fileVersionNode.text = projInfo.projRefInfo.newVersion.toString(4)
             isChange = True
         else:
             try:
@@ -197,21 +238,26 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
                 print("error")
                 pass
 
-    refpkgs = root.findall("ItemGroup/PackageReference", ns)
+    if ns != None:
+        refpkgs = root.findall("vsproj:ItemGroup/vsproj:PackageReference", ns)
+    else:
+        refpkgs = root.findall("ItemGroup/PackageReference")
     for pkg in refpkgs: 
         refver = None
         pkgName = pkg.attrib['Include']
-        for refInfo in projInfo.refPkgs:
-            if refInfo.id == pkgName:
-                if vsver.VersionCompare(refInfo.newVersion, refInfo.version) > 0:
-                    if 'Version' in pkg.attrib:
-                        pkg.attrib['Version'] = refInfo.newVersion.toString(3)
-                    else:
-                        rv = pkg.find('Version', ns)
-                        if rv != None:
-                            rv.text = refInfo.newVersion.toString(3)
-                    isChange = True
-                break
+        refInfo = findRefInfo(projInfo.refPkgs, pkgName)
+        if refInfo == None: continue
+        if vsver.VersionCompare(refInfo.newVersion, refInfo.version) > 0:
+            if 'Version' in pkg.attrib:
+                pkg.attrib['Version'] = refInfo.newVersion.toString(3)
+            else:
+                if ns != None:
+                    rv = pkg.find("vsproj:Version", ns)
+                else:
+                    rv = pkg.find("Version")
+                if rv != None:
+                    rv.text = refInfo.newVersion.toString(3)
+            isChange = True
     
     if isChange:
         #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, xml_declaration=True)

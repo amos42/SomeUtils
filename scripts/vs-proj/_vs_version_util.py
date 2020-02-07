@@ -33,7 +33,7 @@ class SemVersion:
         for v in vers:
             self.core.append(int(v))
 
-    def toString(self, coreLen = 0):
+    def toString(self, coreLen = 0, embPresig = True):
         verStr = ""
         if coreLen == 0: coreLen = len(self.core)
         minlen = min(len(self.core), coreLen)
@@ -45,7 +45,7 @@ class SemVersion:
         if idx < coreLen:
             for i in range(idx, coreLen):
                 verStr = verStr + ".0"
-        if self.preRelease:
+        if embPresig and self.preRelease:
             verStr = verStr + '-' + self.preRelease    
         return verStr
 
@@ -55,8 +55,8 @@ class SemVersion:
         for i in range(0, l1):
             if i < l2: self.core[i] += incVer.core[i]
 
-    def incTailVersion(self, inc = 1):
-        if self.preRelease:
+    def incTailVersion(self, presig = "", inc = 1):
+        if self.preRelease and (not presig or (self.preRelease >= presig)):
             d = re.findall(r"(\d+)(?!.*\d)", self.preRelease)
             if d:
                 ss = self.preRelease[: len(self.preRelease) - len(d)]
@@ -67,6 +67,8 @@ class SemVersion:
         else:
             v = self.core[len(self.core) - 1]
             self.core[len(self.core) - 1] = v + inc
+            if presig:
+                self.preRelease = presig + "1"
 
 
 def VersionCompare(version, baseVersion):
@@ -86,10 +88,10 @@ def VersionCompare(version, baseVersion):
         elif v1 < v2: return -1
 
     if version.preRelease:
-        if not baseVersion.preRelease: return 1
+        if not baseVersion.preRelease: return -1
         else:
             if version.preRelease > baseVersion.preRelease: return 1
             elif version.preRelease < baseVersion.preRelease: return -1
-    elif version.preRelease: return -1
+    elif version.preRelease: return 1
         
     return 0

@@ -180,7 +180,7 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
     return projInfo
     
 
-def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
+def updateProjectInfo(projInfo, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList):
     projpath = os.path.dirname(projInfo.projRefInfo.projectPath)
 
     doc = etree.parse(projInfo.projRefInfo.projectPath)
@@ -192,30 +192,38 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
     else:
         ns = None
 
-    isChange = False
+    isCsprojFileChange = False
+
     if not projInfo.isTestProject:
+        if projInfo.projRefInfo.id in excludePackageList: return
+
         if projInfo.asmInfoPath == None:
             firstPropertiesNode = root.find("PropertyGroup")
             if firstPropertiesNode == None:
                 firstPropertiesNode = etree.SubElement(root, "PropertyGroup")
                 firstPropertiesNode.tail = "\n"
-            if projInfo.projRefInfo.id in assemblyChangePackageList:
-                asemVersionNode = root.find("PropertyGroup/AssemblyVersion")
-                if asemVersionNode == None:
-                    asemVersionNode = etree.SubElement(firstPropertiesNode, "AssemblyVersion")
-                    asemVersionNode.tail = "\n"
-                asemVersionNode.text = projInfo.projRefInfo.newVersion.toString(4)
+
             versionNode = root.find("PropertyGroup/Version")
             if versionNode == None:
                 versionNode = etree.SubElement(firstPropertiesNode, "Version")
                 versionNode.tail = "\n"
             versionNode.text = projInfo.projRefInfo.newVersion.toString(3)
-            fileVersionNode = root.find("PropertyGroup/FileVersion")
-            if fileVersionNode == None:
-                fileVersionNode = etree.SubElement(firstPropertiesNode, "FileVersion")
-                fileVersionNode.tail = "\n"
-            fileVersionNode.text = projInfo.projRefInfo.newVersion.toString(4)
-            isChange = True
+
+            if projInfo.projRefInfo.id in assemblyChangePackageList:
+                asemVersionNode = root.find("PropertyGroup/AssemblyVersion")
+                if asemVersionNode == None:
+                    asemVersionNode = etree.SubElement(firstPropertiesNode, "AssemblyVersion")
+                    asemVersionNode.tail = "\n"
+                asemVersionNode.text = projInfo.projRefInfo.newVersion.toString(4, False)
+
+            if projInfo.projRefInfo.id in assemblyFileChangePackageList:
+                fileVersionNode = root.find("PropertyGroup/FileVersion")
+                if fileVersionNode == None:
+                    fileVersionNode = etree.SubElement(firstPropertiesNode, "FileVersion")
+                    fileVersionNode.tail = "\n"
+                fileVersionNode.text = projInfo.projRefInfo.newVersion.toString(4, False)
+
+            isCsprojFileChange = True
         else:
             try:
                 f = open(projInfo.asmInfoPath, "r", encoding="utf-8")
@@ -224,10 +232,11 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
                 allline = list()
                 for line in f:
                     if re.match(r"\s*\[assembly:\s*AssemblyVersion\(\s*\".*\s*\"\)\]", line):
-                        if assemblyChangePackageList and (projInfo.projRefInfo.id in assemblyChangePackageList):
-                            line = "[assembly: AssemblyVersion(\"" + projInfo.projRefInfo.newVersion.toString(4) + "\")]\n"
+                        if projInfo.projRefInfo.id in assemblyChangePackageList:
+                            line = "[assembly: AssemblyVersion(\"" + projInfo.projRefInfo.newVersion.toString(4, False) + "\")]\n"
                     elif re.match(r"\s*\[assembly:\s*AssemblyFileVersion\(\s*\".*\s*\"\)\]", line):
-                        line = "[assembly: AssemblyFileVersion(\"" + projInfo.projRefInfo.newVersion.toString(4) + "\")]\n"
+                        if projInfo.projRefInfo.id in assemblyFileChangePackageList:
+                            line = "[assembly: AssemblyFileVersion(\"" + projInfo.projRefInfo.newVersion.toString(4, False) + "\")]\n"
                     allline.append(line)
                 f.close()
                 f = open(projInfo.asmInfoPath, "w", encoding="utf-8")
@@ -256,9 +265,9 @@ def updateProjectInfo(projInfo, projDict, assemblyChangePackageList):
                     rv = pkg.find("Version")
                 if rv != None:
                     rv.text = refInfo.newVersion.toString(3)
-            isChange = True
+            isCsprojFileChange = True
     
-    if isChange:
+    if isCsprojFileChange:
         #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, xml_declaration=True)
         #doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", pretty_print=True, doctype='<?xml version="1.0" encoding="utf-8"?>')
         doc.write(projInfo.projRefInfo.projectPath, encoding="utf-8", xml_declaration=True)

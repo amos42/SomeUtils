@@ -59,6 +59,8 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
     print("Analisys", projectFilename, "...")
 
     projectFilename = os.path.abspath(projectFilename)
+    projpath = os.path.dirname(projectFilename)
+
     projInfo.projRefInfo.projectPath = projectFilename
 
     projpath = os.path.dirname(projectFilename)
@@ -177,8 +179,21 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
     for proj in refprojs:
         projInfo.refPrjs.append(os.path.abspath(os.path.join(projpath, proj.attrib['Include'])))
 
+    nuspecPath = os.path.join(projpath, "Module.nuspec")
+    readNugetRefs(projInfo, nuspecPath)
+
     return projInfo
-    
+
+
+def readNugetRefs(projInfo, nuspecPath):
+    if not os.path.exists(nuspecPath): return
+
+    doc = etree.parse(nuspecPath)
+    root = doc.getroot()
+
+    projInfo.projRefInfo.id = root.find("metadata/id").text
+    projInfo.projRefInfo.version = vsver.SemVersion(root.find("metadata/version").text)
+
 
 def updateProjectInfo(projInfo, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList):
     projpath = os.path.dirname(projInfo.projRefInfo.projectPath)

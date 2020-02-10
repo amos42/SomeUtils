@@ -1,6 +1,7 @@
 import sys
 import os
 import argparse
+import fnmatch
 import _vs_project_util as vsproj
 import _vs_solution_util as vssol
 import _vs_version_util as vsver
@@ -62,12 +63,6 @@ def setProjectNewVersionByName(projDict, moduleName, newVersion, changeList):
     return setProjectNewVersion(proj, newVersion, changeList)
 
 
-def applyChangeProjectList(changeList, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList):
-    for proj in changeList:
-        if proj.projRefInfo.projectPath == None: continue
-        vsproj.updateProjectInfo(proj, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList)
-
-
 def analizeProjectList(projList, projDict, changeList, presig = ""):
     if not changeList: return
 
@@ -95,6 +90,25 @@ def analizeProjectList(projList, projDict, changeList, presig = ""):
         if changeProjCnt <= 0: break
 
 
+def convertFilterList(changePackageFilterList, changePackageList, projectList):
+    filterList = list()
+    for filter in changePackageFilterList:
+        if filter == '+' and changePackageList:
+            for proj in changePackageList:
+                filterList.append(proj.projRefInfo.id)
+        else:
+            for proj in projectList:
+                name = proj.projRefInfo.id
+                if fnmatch.fnmatch(name, filter): filterList.append(name)
+    return filterList
+
+
+def applyChangeProjectList(changeList, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList):
+    for proj in changeList:
+        if proj.projRefInfo.projectPath == None: continue
+        vsproj.updateProjectInfo(proj, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList)
+
+
 if __name__ == '__main__':
     solutionFilename, changePackageList, prereleaseSignature, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList = getArguments()
 
@@ -113,7 +127,7 @@ if __name__ == '__main__':
             proj.projRefInfo.id = moduleName
             proj.projRefInfo.newVersion = newVersion
             changelist.append(proj)
-    
+
     analizeProjectList(solInfo.projectList, solInfo.projectDict, changelist, prereleaseSignature)
         
     print("---------------------------")
@@ -133,6 +147,10 @@ if __name__ == '__main__':
             print("   >", proj.toString())
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
+
+    assemblyChangePackageList = convertFilterList(assemblyChangePackageList, changelist, solInfo.projectList)
+    assemblyFileChangePackageList = convertFilterList(assemblyFileChangePackageList, changelist, solInfo.projectList)
+    excludePackageList = convertFilterList(excludePackageList, changelist, solInfo.projectList)
 
     applyChangeProjectList(changelist, solInfo.projectDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList)
 

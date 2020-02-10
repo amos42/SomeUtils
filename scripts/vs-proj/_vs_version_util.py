@@ -92,6 +92,6 @@ def VersionCompare(version, baseVersion):
         else:
             if version.preRelease > baseVersion.preRelease: return 1
             elif version.preRelease < baseVersion.preRelease: return -1
-    elif version.preRelease: return 1
+    elif baseVersion.preRelease: return 1
         
     return 0

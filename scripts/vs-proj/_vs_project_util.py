@@ -1,9 +1,9 @@
 import sys
 import os
 import re
+import json
 import xml.etree.ElementTree as etree
 import _vs_version_util as vsver
-
 
 class ProjectRefInfo:
     #id = None
@@ -37,6 +37,7 @@ class ProjectFileInfo:
     #asmInfoPath = None
     def __init__(self):
         self.projRefInfo = ProjectRefInfo(None, None)
+        self.packageId = None
         self.assemblyVersion = None
         self.assemblyFileVersion = None
         self.refPkgs = list()
@@ -180,7 +181,12 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
         projInfo.refPrjs.append(os.path.abspath(os.path.join(projpath, proj.attrib['Include'])))
 
     nuspecPath = os.path.join(projpath, "Module.nuspec")
-    readNugetRefs(projInfo, nuspecPath)
+    if(os.path.exists(nuspecPath)):
+        readNugetRefs(projInfo, nuspecPath)
+    else:
+        pkgInfoPath = os.path.join(projpath, "Packageinfo.json")
+        if(os.path.exists(pkgInfoPath)):
+            readPackageInfo(projInfo, pkgInfoPath)
 
     return projInfo
 
@@ -193,6 +199,16 @@ def readNugetRefs(projInfo, nuspecPath):
 
     projInfo.projRefInfo.id = root.find("metadata/id").text
     projInfo.projRefInfo.version = vsver.SemVersion(root.find("metadata/version").text)
+    projInfo.packageId = projInfo.projRefInfo.id
+
+
+def readPackageInfo(projInfo, pkgjInfoPath):
+    if not os.path.exists(pkgjInfoPath): return
+
+    with open(pkgjInfoPath, 'r') as f:
+        pkgInfoData = json.load(f)
+
+    projInfo.packageId = pkgInfoData.get("package.id")
 
 
 def updateProjectInfo(projInfo, projDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList):

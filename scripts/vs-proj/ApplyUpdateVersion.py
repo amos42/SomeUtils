@@ -7,6 +7,12 @@ import _vs_solution_util as vssol
 import _vs_version_util as vsver
 
 
+class ChangesData:
+    def __init__(self):
+        self.changeProjList = list()
+        self.changePkgList = list()
+
+
 def getArguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(dest='solutionFilename', help='Example) Sample.sln')
@@ -26,6 +32,13 @@ def getArguments():
     return solutionFilename, changePackageList, prereleaseSignature, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList
 
 
+def addChangeList(changeData, project):
+    if not (project in changeData.changeProjList):
+        changeData.changeProjList.append(project)
+    if project.packageId and (not (project.packageId in changeData.changePkgList)):
+        changeData.changePkgList.append(project.packageId)
+
+
 def setNewVersion(refInfo, newVersion):
     if (newVersion == None) or not newVersion.core: return False
     if (refInfo.newVersion != None) and not refInfo.newVersion.core: curVersion = refInfo.newVersion
@@ -37,34 +50,34 @@ def setNewVersion(refInfo, newVersion):
         return False
 
 
-def setProjectNewVersion(project, newVersion, changeList):
+def setProjectNewVersion(project, newVersion, changeData):
     result = setNewVersion(project.projRefInfo, newVersion)
     if result == True:
-        if not (project in changeList):
-            changeList.append(project)
+        addChangeList(changeData, project)
+
     return result
 
 
-def incProjectVersion(project, changeList, presig = "" ):
+def incProjectVersion(project, changeData, presig = "" ):
     if (project.projRefInfo.newVersion == None) or (not project.projRefInfo.newVersion.core):
         if project.projRefInfo.version != None:
             newVersion = project.projRefInfo.version.clone()
             newVersion.incTailVersion(presig)
         else:
             newVersion = vsver.SemVersion("1.0.1")
-        return setProjectNewVersion(project, newVersion, changeList)
+        return setProjectNewVersion(project, newVersion, changeData)
     else:
         return False
 
 
-def setProjectNewVersionByName(projDict, moduleName, newVersion, changeList):
+def setProjectNewVersionByName(projDict, moduleName, newVersion, changeData):
     proj = projDict.get(moduleName)
     if proj == None: return False
-    return setProjectNewVersion(proj, newVersion, changeList)
+    return setProjectNewVersion(proj, newVersion, changeData)
 
 
-def analizeProjectList(projList, projDict, changeList, presig = ""):
-    if not changeList: return
+def analizeProjectList(projList, projDict, changeData, presig = ""):
+    if not changeData.changeProjList: return
 
     while True:
         changeProjCnt = 0
@@ -74,18 +87,18 @@ def analizeProjectList(projList, projDict, changeList, presig = ""):
 
             changeCnt = 0
             for ref in proj.refPkgs:
-                for prj2 in changeList:
+                for prj2 in changeData.changeProjList:
                     if ref.id == prj2.projRefInfo.id:
                         if setNewVersion(ref, prj2.projRefInfo.newVersion): changeCnt = changeCnt + 1
                         break
             if changeCnt <= 0:
                 for ref in proj.refPrjs:
                     proj2 = projDict[ref]
-                    if proj2 in changeList: 
+                    if proj2 in changeData.changeProjList: 
                         changeCnt = changeCnt + 1
                         break
             if changeCnt > 0:
-                if incProjectVersion(proj, changeList, presig): changeProjCnt = changeProjCnt + 1
+                if incProjectVersion(proj, changeData, presig): changeProjCnt = changeProjCnt + 1
 
         if changeProjCnt <= 0: break
 
@@ -114,24 +127,24 @@ if __name__ == '__main__':
 
     solInfo = vssol.getSolutionInfo(solutionFilename)
 
-    changelist = list()
+    changeInfo = ChangesData()
     for changeModule in changePackageList:
         changeModuleInfo = changeModule.split(" ")
         moduleName = changeModuleInfo[0]
         newVersion = vsver.SemVersion(changeModuleInfo[1])
         print("> ", moduleName, newVersion.toString())
 
-        result = setProjectNewVersionByName(solInfo.projectDict, moduleName, newVersion, changelist)
+        result = setProjectNewVersionByName(solInfo.projectDict, moduleName, newVersion, changeInfo)
         if not result:
             proj = vsproj.ProjectFileInfo()
             proj.projRefInfo.id = moduleName
             proj.projRefInfo.newVersion = newVersion
-            changelist.append(proj)
+            addChangeList(changeInfo, proj)
 
-    analizeProjectList(solInfo.projectList, solInfo.projectDict, changelist, prereleaseSignature)
+    analizeProjectList(solInfo.projectList, solInfo.projectDict, changeInfo, prereleaseSignature)
         
     print("---------------------------")
-    for projInfo in changelist:
+    for projInfo in changeInfo.changeProjList:
         if not projInfo.projRefInfo.projectPath: continue
         if (projInfo.projRefInfo.newVersion == None) or (not projInfo.projRefInfo.newVersion.core): continue
         print("* project info :", projInfo.projRefInfo.toString())
@@ -148,10 +161,15 @@ if __name__ == '__main__':
         print("  * test project :", projInfo.isTestProject)
         print("---------------------------")
 
-    assemblyChangePackageList = convertFilterList(assemblyChangePackageList, changelist, solInfo.projectList)
-    assemblyFileChangePackageList = convertFilterList(assemblyFileChangePackageList, changelist, solInfo.projectList)
-    excludePackageList = convertFilterList(excludePackageList, changelist, solInfo.projectList)
+    print("# Changes Package")
+    for pkg in changeInfo.changePkgList:
+        print(pkg)
+    print("---------------------------")
 
-    applyChangeProjectList(changelist, solInfo.projectDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList)
+    assemblyChangePackageList = convertFilterList(assemblyChangePackageList, changeInfo.changeProjList, solInfo.projectList)
+    assemblyFileChangePackageList = convertFilterList(assemblyFileChangePackageList, changeInfo.changeProjList, solInfo.projectList)
+    excludePackageList = convertFilterList(excludePackageList, changeInfo.changeProjList, solInfo.projectList)
+
+    applyChangeProjectList(changeInfo.changeProjList, solInfo.projectDict, assemblyChangePackageList, assemblyFileChangePackageList, excludePackageList)
 
     print("All Done.")

@@ -205,7 +205,7 @@ def readNugetRefs(projInfo, nuspecPath):
 def readPackageInfo(projInfo, pkgjInfoPath):
     if not os.path.exists(pkgjInfoPath): return
 
-    with open(pkgjInfoPath, 'r') as f:
+    with open(pkgjInfoPath, 'r', encoding="utf-8") as f:
         pkgInfoData = json.load(f)
 
     projInfo.packageId = pkgInfoData.get("package.id")

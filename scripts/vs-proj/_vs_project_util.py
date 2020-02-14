@@ -184,9 +184,16 @@ def getProjectInfo(projectFilename): # return ProjectFileInfo
     if(os.path.exists(nuspecPath)):
         readNugetRefs(projInfo, nuspecPath)
     else:
-        pkgInfoPath = os.path.join(projpath, "Packageinfo.json")
-        if(os.path.exists(pkgInfoPath)):
-            readPackageInfo(projInfo, pkgInfoPath)
+        if ns != None:
+            ispkgnode = root.find("vsproj:PropertyGroup/vsproj:GeneratePackageOnBuild", ns)
+        else:
+            ispkgnode = root.find("PropertyGroup/GeneratePackageOnBuild")
+        if ispkgnode != None:
+            ispkg = bool(ispkgnode.text)
+        else:        
+            pkgInfoPath = os.path.join(projpath, "Packageinfo.json")
+            if(os.path.exists(pkgInfoPath)):
+                readPackageInfo(projInfo, pkgInfoPath)
 
     return projInfo
 

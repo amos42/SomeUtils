@@ -1,8 +1,18 @@
 /*
+The MIT License (MIT)
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+/*
 MacroUtil.cs : Macro 치환 문자열 처리
 Made by : Amos42
-Created : 2017-04-24 오후 1:08:08
-Last Update : 2017-04-24 오후 1:08:08
 */
 using System;
 using System.Collections.Generic;
@@ -17,6 +27,11 @@ namespace DevPlatform.Base
     /// </summary>
     public interface IMacroRunner
     {
+        /// <summary>
+        /// 매크로 전개 함수
+        /// </summary>
+        /// <param name="macroKey">매크로 전개 키값</param>
+        /// <returns></returns>
         string Run(string macroKey);
     }
 
@@ -25,10 +40,24 @@ namespace DevPlatform.Base
     /// </summary>
     public static class MacroUtil
     {
+        /// <summary>
+        /// 매크로 시작 식별자
+        /// </summary>
         public const string DEFAULT_START_LITER = "${";
+        /// <summary>
+        /// 매크로 종료 식별자
+        /// </summary>
         public const string DEFAULT_END_LITER = "}";
+        /// <summary>
+        /// 네임스페이스 구분자
+        /// </summary>
         public const string DEFAULT_NAMESPACE_SEP = ".";
+        /// <summary>
+        /// 기본 버퍼 크기
+        /// </summary>
         public const int BUFFER_SIZE = 1024 * 8;
+
+        //private static readonly ILogger logger = LoggerFactory.GetLogger();
 
         /// <summary>
         /// Stream 입력을 받아 매크로 프로세스를 진행합니다.
@@ -70,7 +99,8 @@ namespace DevPlatform.Base
             }
             catch (IOException ex)
             {
-                //Console.WriteLine(ex.Message, e.Trace);
+                ILogger logger = LoggerFactory.GetLogger();
+                logger?.Error(ex.Message, true);
                 return 0;
             }
 
@@ -200,7 +230,7 @@ namespace DevPlatform.Base
         /// </summary>
         private class MacroRunner : IMacroRunner
         {
-            private IDictionary<string, object> macros;
+            private readonly IDictionary<string, object> macros;
 
             public MacroRunner(IDictionary<string, object> macros)
             {
@@ -211,12 +241,36 @@ namespace DevPlatform.Base
             {
                 if (macros.TryGetValue(macroKey, out var value))
                 {
-                    return value as string;
+                    if (value == null) return null;
+                    return (value is string) ? value as string : value.ToString();
                 }
-                else
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 매크로 적용하는 IRunner 구현체
+        /// </summary>
+        private class MultiMacroRunner : IMacroRunner
+        {
+            private readonly IEnumerable<IDictionary<string, object>> macrosList;
+
+            public MultiMacroRunner(IEnumerable<IDictionary<string, object>> macrosList)
+            {
+                this.macrosList = macrosList;
+            }
+
+            public string Run(string macroKey)
+            {
+                foreach (var macros in macrosList)
                 {
-                    return null;
+                    if (macros != null && macros.TryGetValue(macroKey, out var value))
+                    {
+                        if (value == null) return null;
+                        return (value is string) ? value as string : value.ToString();
+                    }
                 }
+                return null;
             }
         }
 
@@ -225,7 +279,7 @@ namespace DevPlatform.Base
         /// </summary>
         private class MacroRunner2 : IMacroRunner
         {
-            private NameValueCollection macros;
+            private readonly NameValueCollection macros;
 
             public MacroRunner2(NameValueCollection macros)
             {
@@ -315,6 +369,19 @@ namespace DevPlatform.Base
         /// <param name="startLiter">매크로 시작 식별 문자</param>
         /// <param name="endLiter">매크로 종료 식별 문자</param>
         /// <returns>매크로 처리 결과 문자열</returns>
+        public static string ProcessMacro(string source, IEnumerable<IDictionary<string, object>> macrosList, string startLiter, string endLiter)
+        {
+            return RunMacro(source, startLiter, endLiter, new MultiMacroRunner(macrosList));
+        }
+
+        /// <summary>
+        /// 문자열을 입력 받아 매크로 프로세스를 진행합니다.
+        /// </summary>
+        /// <param name="source">입력 문자열</param>
+        /// <param name="macros">매크로 사전</param>
+        /// <param name="startLiter">매크로 시작 식별 문자</param>
+        /// <param name="endLiter">매크로 종료 식별 문자</param>
+        /// <returns>매크로 처리 결과 문자열</returns>
         public static string ProcessMacro(string source, NameValueCollection macros, string startLiter, string endLiter)
         {
             return RunMacro(source, startLiter, endLiter, new MacroRunner2(macros));
@@ -348,6 +415,17 @@ namespace DevPlatform.Base
         /// <param name="source">입력 문자열</param>
         /// <param name="macros">매크로 사전</param>
         /// <returns>매크로 처리 결과 문자열</returns>
+        public static string ProcessMacro(string source, IEnumerable<IDictionary<string, object>> macrosList)
+        {
+            return ProcessMacro(source, macrosList, DEFAULT_START_LITER, DEFAULT_END_LITER);
+        }
+
+        /// <summary>
+        /// 문자열을 입력 받아 매크로 프로세스를 진행합니다.
+        /// </summary>
+        /// <param name="source">입력 문자열</param>
+        /// <param name="macros">매크로 사전</param>
+        /// <returns>매크로 처리 결과 문자열</returns>
         public static string ProcessMacro(string source, NameValueCollection macros)
         {
             return ProcessMacro(source, macros, DEFAULT_START_LITER, DEFAULT_END_LITER);
@@ -363,6 +441,18 @@ namespace DevPlatform.Base
         public static string ProcessMacro(string source, string nameSpace, IDictionary<string, object> macros)
         {
             return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MacroRunner(macros), null);
+        }
+
+        /// <summary>
+        /// 문자열을 입력 받아 매크로 프로세스를 진행합니다.
+        /// </summary>
+        /// <param name="source">입력 문자열</param>
+        /// <param name="nameSpace"></param>
+        /// <param name="macros">매크로 사전</param>
+        /// <returns>매크로 처리 결과 문자열</returns>
+        public static string ProcessMacro(string source, string nameSpace, IEnumerable<IDictionary<string, object>> macrosList)
+        {
+            return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MultiMacroRunner(macrosList), null);
         }
 
         /// <summary>

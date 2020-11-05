@@ -18,10 +18,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace DevPlatform.Base
 {
+    using ObjectDictionary = IDictionary<string, object>;
+
     /// <summary>
     /// IRunner 인터페이스
     /// </summary>
@@ -57,7 +60,123 @@ namespace DevPlatform.Base
         /// </summary>
         public const int BUFFER_SIZE = 1024 * 8;
 
-        //private static readonly ILogger logger = LoggerFactory.GetLogger();
+        /// <summary>
+        /// 복수개 매크로 사전에서 문자열 값 추출
+        /// </summary>
+        /// <typeparam name="T">값 타입</typeparam>
+        /// <param name="macrosList">매크로 사전 리스트</param>
+        /// <param name="macroKey">매크로 키</param>
+        /// <param name="value">매크로 값</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
+        /// <returns>값이 있으면 true</returns>
+        public static bool TryGetMacroValue<T>(this IEnumerable<ObjectDictionary> macrosList, string macroKey, out T value, IDictionary<string, string> convertTable = null)
+        {
+            if (macrosList == null)
+            {
+                value = default(T);
+                return false;
+            }
+
+            string macroName;
+            if (convertTable != null && convertTable.TryGetValue(macroKey, out var macroName2))
+            {
+                macroName = macroName2;
+            }
+            else
+            {
+                macroName = macroKey;
+            }
+
+            foreach (var macros in macrosList)
+            {
+                if (macros != null && macros.TryGetValue(macroName, out var value2))
+                {
+                    if (value2 == null)
+                    {
+                        value = default(T);
+                        return true;
+                    }
+                    else
+                    {
+                        if (typeof(T).IsAssignableFrom(value2?.GetType()))
+                        {
+                            value = (T)value2;
+                            return true;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            value = default(T);
+            return false;
+        }
+
+        /// <summary>
+        /// 복수개 매크로 사전에서 문자열 값 추출
+        /// </summary>
+        /// <typeparam name="T">값 타입</typeparam>
+        /// <param name="macrosList">매크로 사전 리스트</param>
+        /// <param name="macroKey">매크로키</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
+        /// <returns>매크로 값</returns>
+        public static T GetMacroValue<T>(this IEnumerable<IDictionary<string, object>> macrosList, string macroKey, IDictionary<string, string> convertTable = null)
+        {
+            if (macrosList?.Any() != true) return default(T);
+
+            string macroName;
+            if (convertTable != null && convertTable.TryGetValue(macroKey, out var macroName2))
+            {
+                macroName = macroName2;
+            }
+            else
+            {
+                macroName = macroKey;
+            }
+
+            foreach (var macros in macrosList)
+            {
+                if (macros != null && macros.TryGetValue(macroName, out var value))
+                {
+                    if (value != null && typeof(T).IsAssignableFrom(value.GetType()))
+                    {
+                        return (T)value;
+                    }
+                    break;
+                }
+            }
+
+            return default(T);
+        }
+
+        /// <summary>
+        /// 복수개 매크로 사전에서 문자열 값 추출
+        /// </summary>
+        /// <param name="macroKey">매크로키</param>
+        /// <param name="macrosList">매크로 사전 리스트</param>
+        /// <returns>매크로 값</returns>
+        [Obsolete("GetMacroValue<string>()로 교체하기 바랍니다.")]
+        public static string GetMacroStringValue(this IEnumerable<IDictionary<string, object>> macrosList, string macroKey)
+        {
+            if (macrosList == null) return null;
+
+            foreach (var macros in macrosList)
+            {
+                if (macros != null && macros.TryGetValue(macroKey, out var value))
+                {
+                    if (typeof(string).IsAssignableFrom(value.GetType()))
+                    {
+                        return (string)value;
+                    }
+                    else
+                    {
+                        return value.ToString();
+                    }
+                }
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Stream 입력을 받아 매크로 프로세스를 진행합니다.
@@ -231,15 +350,27 @@ namespace DevPlatform.Base
         private class MacroRunner : IMacroRunner
         {
             private readonly IDictionary<string, object> macros;
+            private readonly IDictionary<string, string> convertTable;
 
-            public MacroRunner(IDictionary<string, object> macros)
+            public MacroRunner(IDictionary<string, object> macros, IDictionary<string, string> convertTable = null)
             {
                 this.macros = macros;
+                this.convertTable = convertTable;
             }
 
             public string Run(string macroKey)
             {
-                if (macros.TryGetValue(macroKey, out var value))
+                string macroName;
+                if (convertTable != null && convertTable.TryGetValue(macroKey, out var macroName2))
+                {
+                    macroName = macroName2;
+                }
+                else
+                {
+                    macroName = macroKey;
+                }
+
+                if (macros.TryGetValue(macroName, out var value))
                 {
                     if (value == null) return null;
                     return (value is string) ? value as string : value.ToString();
@@ -254,23 +385,17 @@ namespace DevPlatform.Base
         private class MultiMacroRunner : IMacroRunner
         {
             private readonly IEnumerable<IDictionary<string, object>> macrosList;
+            private readonly IDictionary<string, string> convertTable;
 
-            public MultiMacroRunner(IEnumerable<IDictionary<string, object>> macrosList)
+            public MultiMacroRunner(IEnumerable<IDictionary<string, object>> macrosList, IDictionary<string, string> convertTable = null)
             {
                 this.macrosList = macrosList;
+                this.convertTable = convertTable;
             }
 
             public string Run(string macroKey)
             {
-                foreach (var macros in macrosList)
-                {
-                    if (macros != null && macros.TryGetValue(macroKey, out var value))
-                    {
-                        if (value == null) return null;
-                        return (value is string) ? value as string : value.ToString();
-                    }
-                }
-                return null;
+                return macrosList.GetMacroValue<string>(macroKey, convertTable);
             }
         }
 
@@ -355,10 +480,11 @@ namespace DevPlatform.Base
         /// <param name="macros">매크로 사전</param>
         /// <param name="startLiter">매크로 시작 식별 문자</param>
         /// <param name="endLiter">매크로 종료 식별 문자</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, IDictionary<string, object> macros, string startLiter, string endLiter)
+        public static string ProcessMacro(string source, ObjectDictionary macros, string startLiter, string endLiter, IDictionary<string, string> convertTable = null)
         {
-            return RunMacro(source, startLiter, endLiter, new MacroRunner(macros));
+            return RunMacro(source, startLiter, endLiter, new MacroRunner(macros, convertTable));
         }
 
         /// <summary>
@@ -368,10 +494,11 @@ namespace DevPlatform.Base
         /// <param name="macros">매크로 사전</param>
         /// <param name="startLiter">매크로 시작 식별 문자</param>
         /// <param name="endLiter">매크로 종료 식별 문자</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, IEnumerable<IDictionary<string, object>> macrosList, string startLiter, string endLiter)
+        public static string ProcessMacro(string source, IEnumerable<ObjectDictionary> macrosList, string startLiter, string endLiter, IDictionary<string, string> convertTable = null)
         {
-            return RunMacro(source, startLiter, endLiter, new MultiMacroRunner(macrosList));
+            return RunMacro(source, startLiter, endLiter, new MultiMacroRunner(macrosList, convertTable));
         }
 
         /// <summary>
@@ -403,10 +530,11 @@ namespace DevPlatform.Base
         /// </summary>
         /// <param name="source">입력 문자열</param>
         /// <param name="macros">매크로 사전</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, IDictionary<string, object> macros)
+        public static string ProcessMacro(string source, ObjectDictionary macros, IDictionary<string, string> convertTable = null)
         {
-            return ProcessMacro(source, macros, DEFAULT_START_LITER, DEFAULT_END_LITER);
+            return ProcessMacro(source, macros, DEFAULT_START_LITER, DEFAULT_END_LITER, convertTable);
         }
 
         /// <summary>
@@ -414,10 +542,11 @@ namespace DevPlatform.Base
         /// </summary>
         /// <param name="source">입력 문자열</param>
         /// <param name="macros">매크로 사전</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, IEnumerable<IDictionary<string, object>> macrosList)
+        public static string ProcessMacro(string source, IEnumerable<ObjectDictionary> macrosList, IDictionary<string, string> convertTable = null)
         {
-            return ProcessMacro(source, macrosList, DEFAULT_START_LITER, DEFAULT_END_LITER);
+            return ProcessMacro(source, macrosList, DEFAULT_START_LITER, DEFAULT_END_LITER, convertTable);
         }
 
         /// <summary>
@@ -437,10 +566,11 @@ namespace DevPlatform.Base
         /// <param name="source">입력 문자열</param>
         /// <param name="nameSpace"></param>
         /// <param name="macros">매크로 사전</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, string nameSpace, IDictionary<string, object> macros)
+        public static string ProcessMacro(string source, string nameSpace, ObjectDictionary macros, IDictionary<string, string> convertTable = null)
         {
-            return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MacroRunner(macros), null);
+            return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MacroRunner(macros, convertTable), null);
         }
 
         /// <summary>
@@ -449,10 +579,11 @@ namespace DevPlatform.Base
         /// <param name="source">입력 문자열</param>
         /// <param name="nameSpace"></param>
         /// <param name="macros">매크로 사전</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static string ProcessMacro(string source, string nameSpace, IEnumerable<IDictionary<string, object>> macrosList)
+        public static string ProcessMacro(string source, string nameSpace, IEnumerable<ObjectDictionary> macrosList, IDictionary<string, string> convertTable = null)
         {
-            return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MultiMacroRunner(macrosList), null);
+            return ProcessMacro(source, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MultiMacroRunner(macrosList, convertTable), null);
         }
 
         /// <summary>
@@ -474,10 +605,11 @@ namespace DevPlatform.Base
         /// <param name="outputStream"></param>
         /// <param name="nameSpace"></param>
         /// <param name="macros">매크로 사전</param>
+        /// <param name="convertTable">매크로 키 변환 테이블</param>
         /// <returns>매크로 처리 결과 문자열</returns>
-        public static int ProcessMacro(Stream inputStream, Stream outputStream, string nameSpace, IDictionary<string, object> macros)
+        public static int ProcessMacro(Stream inputStream, Stream outputStream, string nameSpace, ObjectDictionary macros, IDictionary<string, string> convertTable = null)
         {
-            return ProcessMacro(inputStream, outputStream, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MacroRunner(macros), null);
+            return ProcessMacro(inputStream, outputStream, DEFAULT_START_LITER, DEFAULT_END_LITER, nameSpace, null, new MacroRunner(macros, convertTable), null);
         }
 
         /// <summary>
